@@ -12,6 +12,9 @@ export type BackupChildRecord = {
   id: string
   name: string
   photoFiles: File[]
+  photoSlotOrder?: Array<
+    'front-1' | 'front-2' | 'left' | 'right' | 'full-body' | 'close-up'
+  >
   createdAt: string
   updatedAt: string
 }
@@ -124,6 +127,7 @@ async function serializeBackup(payload: GivingTreeBackupPayload) {
       id: child.id,
       name: child.name,
       photoFiles,
+      photoSlotOrder: child.photoSlotOrder,
       createdAt: child.createdAt,
       updatedAt: child.updatedAt,
     })
@@ -162,6 +166,25 @@ function parseSerializedBackup(serialized: string): GivingTreeBackupPayload {
       name: child.name,
       createdAt: child.createdAt,
       updatedAt: child.updatedAt,
+      photoSlotOrder: Array.isArray(child.photoSlotOrder)
+        ? child.photoSlotOrder.filter(
+            (
+              slot,
+            ): slot is
+              | 'front-1'
+              | 'front-2'
+              | 'left'
+              | 'right'
+              | 'full-body'
+              | 'close-up' =>
+              slot === 'front-1' ||
+              slot === 'front-2' ||
+              slot === 'left' ||
+              slot === 'right' ||
+              slot === 'full-body' ||
+              slot === 'close-up',
+          )
+        : undefined,
       photoFiles: child.photoFiles.map(
         (photo) =>
           new File([base64ToBytes(photo.data)], photo.name, {
