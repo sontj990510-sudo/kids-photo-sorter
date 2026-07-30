@@ -45,6 +45,12 @@ type ShareReceipt = {
   completedAt: string
 }
 
+type LightboxPhoto = {
+  src: string
+  alt: string
+  faces?: AnalyzedFace[]
+}
+
 type ChildRecord = {
   id: string
   name: string
@@ -66,6 +72,47 @@ function formatReceiptTime(completedAt: string) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function GivingTreeMark() {
+  return (
+    <svg
+      className="giving-tree-mark"
+      viewBox="0 0 160 160"
+      role="img"
+      aria-label="Giving Tree 나무 로고"
+    >
+      <path
+        d="M75 136c9-23 5-43 4-62h13c-1 18 1 39 13 62H75Z"
+        fill="#9a6544"
+      />
+      <path
+        d="M85 102c-11-9-19-18-25-29M88 91c10-9 17-17 23-27"
+        fill="none"
+        stroke="#9a6544"
+        strokeLinecap="round"
+        strokeWidth="8"
+      />
+      <circle cx="53" cy="62" r="31" fill="#8fc86b" />
+      <circle cx="86" cy="46" r="37" fill="#5ea76f" />
+      <circle cx="116" cy="68" r="30" fill="#77bb63" />
+      <circle cx="80" cy="76" r="35" fill="#6db664" />
+      <circle cx="48" cy="55" r="7" fill="#f6c768" />
+      <circle cx="103" cy="42" r="7" fill="#f09b72" />
+      <circle cx="111" cy="75" r="6" fill="#f6c768" />
+      <path
+        d="M72 47c-5-8-17-3-13 6 2 5 13 11 13 11s11-7 13-12c3-9-9-13-13-5Z"
+        fill="#fff8df"
+      />
+      <path
+        d="M45 131c20-7 64-7 84 0"
+        fill="none"
+        stroke="#d7e7bd"
+        strokeLinecap="round"
+        strokeWidth="8"
+      />
+    </svg>
+  )
 }
 
 async function openChildrenDB() {
@@ -108,6 +155,7 @@ function App() {
   const [learningConflict, setLearningConflict] = useState<LearningConflict | null>(null)
   const [excludedChildPhotos, setExcludedChildPhotos] = useState<Record<string, true>>({})
   const [shareReceipts, setShareReceipts] = useState<Record<string, ShareReceipt>>({})
+  const [lightboxPhoto, setLightboxPhoto] = useState<LightboxPhoto | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisProgress, setAnalysisProgress] = useState({ completed: 0, total: 0 })
 
@@ -136,6 +184,27 @@ function App() {
       window.clearTimeout(timerId)
     }
   }, [learningConflict, pendingLearning])
+
+  useEffect(() => {
+    if (!lightboxPhoto) {
+      return
+    }
+
+    const previousOverflow = document.body.style.overflow
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setLightboxPhoto(null)
+      }
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [lightboxPhoto])
 
   useEffect(() => {
     return () => {
@@ -206,6 +275,7 @@ function App() {
   }, [loadChildren])
 
   const clearDraftPreview = () => {
+    setLightboxPhoto(null)
     draftPreviewItems.forEach(({ url }) => revokeObjectUrl(url))
     setDraftPreviewItems([])
   }
@@ -356,6 +426,7 @@ function App() {
   }
 
   const handleClearClassification = () => {
+    setLightboxPhoto(null)
     previewItems.forEach(({ url }) => revokeObjectUrl(url))
     previewItemsRef.current = []
     setPreviewItems([])
@@ -371,6 +442,7 @@ function App() {
   }
 
   const handleRemoveClassificationItem = (itemId: string) => {
+    setLightboxPhoto(null)
     const targetItem = previewItems.find((item) => item.id === itemId)
     if (targetItem) {
       revokeObjectUrl(targetItem.url)
@@ -746,6 +818,7 @@ function App() {
   }
 
   const handleRemoveDraftItem = (itemId: string) => {
+    setLightboxPhoto(null)
     const targetItem = draftPreviewItems.find((item) => item.id === itemId)
     if (targetItem) {
       revokeObjectUrl(targetItem.url)
@@ -1033,15 +1106,19 @@ function App() {
     <main className="photo-sorter-app">
       <section className="shell">
         <header className="hero-card">
-          <div className="hero-copy">
-            <p className="eyebrow">아이 사진 관리</p>
-            <h1>아이 등록부터 사진 분류까지 한 번에 관리해 보세요.</h1>
-            <p className="description">
-              아이의 대표사진을 등록하고, 사진 분류와 공유까지 같은 화면에서 이어서 진행할 수 있어요.
-            </p>
+          <div className="hero-badge">
+            <GivingTreeMark />
           </div>
-          <div className="hero-badge" aria-hidden="true">
-            👶
+          <div className="hero-copy">
+            <p className="eyebrow">GIVING TREE · PHOTO GARDEN</p>
+            <h1>
+              아이들의 하루가 자라는
+              <span>Giving Tree</span>
+            </h1>
+            <p className="description">
+              아이 등록부터 사진 분류와 공유까지, 소중한 오늘을 나무처럼 차곡차곡
+              키워보세요.
+            </p>
           </div>
         </header>
 
@@ -1051,14 +1128,14 @@ function App() {
             className={`tab-button ${activeTab === 'register' ? 'active' : ''}`}
             onClick={() => setActiveTab('register')}
           >
-            아이 등록
+            <span aria-hidden="true">🌱</span> 아이 등록
           </button>
           <button
             type="button"
             className={`tab-button ${activeTab === 'classify' ? 'active' : ''}`}
             onClick={() => setActiveTab('classify')}
           >
-            사진 분류
+            <span aria-hidden="true">🍃</span> 사진 분류
           </button>
         </nav>
 
@@ -1119,7 +1196,19 @@ function App() {
                 <div className="preview-grid draft-grid" aria-live="polite">
                   {draftPreviewItems.map((item) => (
                     <article className="preview-tile" key={item.id}>
-                      <img src={item.url} alt={item.file.name} />
+                      <button
+                        type="button"
+                        className="photo-view-button"
+                        onClick={() =>
+                          setLightboxPhoto({ src: item.url, alt: item.file.name })
+                        }
+                        aria-label={`${item.file.name} 크게 보기`}
+                      >
+                        <img src={item.url} alt={item.file.name} />
+                        <span className="zoom-badge" aria-hidden="true">
+                          확대
+                        </span>
+                      </button>
                       <div className="preview-meta">
                         <p>{item.file.name}</p>
                         <button type="button" onClick={() => handleRemoveDraftItem(item.id)}>
@@ -1208,7 +1297,22 @@ function App() {
                     <article className="child-card" key={child.id}>
                       <div className="child-card-image">
                         {childImageUrls[child.id] ? (
-                          <img src={childImageUrls[child.id]} alt={child.name} />
+                          <button
+                            type="button"
+                            className="photo-view-button"
+                            onClick={() =>
+                              setLightboxPhoto({
+                                src: childImageUrls[child.id],
+                                alt: `${child.name} 대표사진`,
+                              })
+                            }
+                            aria-label={`${child.name} 대표사진 크게 보기`}
+                          >
+                            <img src={childImageUrls[child.id]} alt={child.name} />
+                            <span className="zoom-badge" aria-hidden="true">
+                              확대
+                            </span>
+                          </button>
                         ) : (
                           <div className="child-placeholder">📷</div>
                         )}
@@ -1406,7 +1510,23 @@ function App() {
                           ×
                         </button>
                         <div className="analysis-image-frame">
-                          <img src={url} alt={file.name} />
+                          <button
+                            type="button"
+                            className="photo-view-button"
+                            onClick={() =>
+                              setLightboxPhoto({
+                                src: url,
+                                alt: file.name,
+                                faces: analysis?.faces,
+                              })
+                            }
+                            aria-label={`${file.name} 크게 보기`}
+                          >
+                            <img src={url} alt={file.name} />
+                            <span className="zoom-badge" aria-hidden="true">
+                              확대
+                            </span>
+                          </button>
                           {analysis?.faces.map((face, faceIndex) => {
                             const matchedName = face.match.childId
                               ? childNamesById[face.match.childId]
@@ -1617,7 +1737,22 @@ function App() {
                       <div className="result-photo-grid">
                         {items.map((item) => (
                           <div className="result-photo-item" key={item.id}>
-                            <img src={item.url} alt={`${child.name} 분류 사진`} />
+                            <button
+                              type="button"
+                              className="photo-view-button"
+                              onClick={() =>
+                                setLightboxPhoto({
+                                  src: item.url,
+                                  alt: `${child.name} 분류 사진`,
+                                })
+                              }
+                              aria-label={`${child.name} 분류 사진 크게 보기`}
+                            >
+                              <img src={item.url} alt={`${child.name} 분류 사진`} />
+                              <span className="zoom-badge" aria-hidden="true">
+                                확대
+                              </span>
+                            </button>
                             <button
                               type="button"
                               className="result-remove-button"
@@ -1655,7 +1790,23 @@ function App() {
                     </p>
                     <div className="result-photo-grid">
                       {reviewItems.map((item) => (
-                        <img src={item.url} alt="확인 필요한 사진" key={item.id} />
+                        <button
+                          type="button"
+                          className="photo-view-button review-photo-button"
+                          onClick={() =>
+                            setLightboxPhoto({
+                              src: item.url,
+                              alt: '확인 필요한 사진',
+                            })
+                          }
+                          aria-label="확인 필요한 사진 크게 보기"
+                          key={item.id}
+                        >
+                          <img src={item.url} alt="확인 필요한 사진" />
+                          <span className="zoom-badge" aria-hidden="true">
+                            확대
+                          </span>
+                        </button>
                       ))}
                     </div>
                   </article>
@@ -1665,6 +1816,54 @@ function App() {
           </section>
         )}
       </section>
+      {lightboxPhoto ? (
+        <div
+          className="photo-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="사진 크게 보기"
+          onClick={() => setLightboxPhoto(null)}
+        >
+          <div className="photo-lightbox-panel" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="lightbox-close-button"
+              onClick={() => setLightboxPhoto(null)}
+              aria-label="확대 사진 닫기"
+            >
+              ← 사진으로 돌아가기
+            </button>
+            <div className="lightbox-image-frame">
+              <img src={lightboxPhoto.src} alt={lightboxPhoto.alt} />
+              {lightboxPhoto.faces?.map((face, faceIndex) => {
+                const matchedName = face.match.childId
+                  ? childNamesById[face.match.childId]
+                  : undefined
+                const label = `${faceIndex + 1} · ${matchedName ?? '확인'}`
+
+                return (
+                  <span
+                    className={`face-box ${
+                      matchedName ? 'face-box-matched' : 'face-box-review'
+                    }`}
+                    key={`lightbox-face-${faceIndex}`}
+                    title={`${label} · 유사도 ${Math.round(face.match.similarity * 100)}%`}
+                    style={{
+                      left: `${face.x * 100}%`,
+                      top: `${face.y * 100}%`,
+                      width: `${face.width * 100}%`,
+                      height: `${face.height * 100}%`,
+                    }}
+                  >
+                    <span>{label}</span>
+                  </span>
+                )
+              })}
+            </div>
+            <p>바깥쪽을 누르거나 위 버튼을 누르면 바로 돌아갑니다.</p>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }
