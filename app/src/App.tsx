@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { openDB } from 'idb'
+import { analyzeFacesInFile } from './lib/faceDetection'
+import type { DetectedFaceBox } from './lib/faceDetection'
 import './App.css'
 
 type PreviewItem = {
   id: string
   file: File
   url: string
+}
+
+type FaceAnalysis = {
+  faces: DetectedFaceBox[]
+  durationMs: number
+  error?: string
 }
 
 type ChildRecord = {
@@ -46,6 +54,9 @@ function App() {
   const [editingChildId, setEditingChildId] = useState<string | null>(null)
   const [childImageUrls, setChildImageUrls] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
+  const [faceAnalyses, setFaceAnalyses] = useState<Record<string, FaceAnalysis>>({})
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisProgress, setAnalysisProgress] = useState({ completed: 0, total: 0 })
 
   const classifyInputRef = useRef<HTMLInputElement | null>(null)
   const registerInputRef = useRef<HTMLInputElement | null>(null)
@@ -164,6 +175,8 @@ function App() {
     previewItemsRef.current = []
     setPreviewItems([])
     setSelectedFiles([])
+    setFaceAnalyses({})
+    setAnalysisProgress({ completed: 0, total: 0 })
     setStatusMessage('선택한 사진을 모두 비웠어요.')
   }
 
@@ -180,7 +193,60 @@ function App() {
         return matchingItem?.file !== file
       }),
     )
+    setFaceAnalyses((previousAnalyses) => {
+      const nextAnalyses = { ...previousAnalyses }
+      delete nextAnalyses[itemId]
+      return nextAnalyses
+    })
     setStatusMessage('선택한 사진을 삭제했어요.')
+  }
+
+  const handleAnalyzeFaces = async () => {
+    if (previewItems.length === 0 || isAnalyzing) {
+      return
+    }
+
+    const itemsToAnalyze = [...previewItems]
+    const nextAnalyses: Record<string, FaceAnalysis> = {}
+    let failedCount = 0
+
+    setIsAnalyzing(true)
+    setFaceAnalyses({})
+    setAnalysisProgress({ completed: 0, total: itemsToAnalyze.length })
+    setStatusMessage('얼굴 인식 모델을 준비하고 있어요. 첫 실행은 조금 걸릴 수 있어요.')
+
+    try {
+      for (let index = 0; index < itemsToAnalyze.length; index += 1) {
+        const item = itemsToAnalyze[index]
+
+        try {
+          nextAnalyses[item.id] = await analyzeFacesInFile(item.file)
+        } catch (error) {
+          failedCount += 1
+          nextAnalyses[item.id] = {
+            faces: [],
+            durationMs: 0,
+            error: error instanceof Error ? error.message : '얼굴을 분석하지 못했어요.',
+          }
+        }
+
+        setFaceAnalyses({ ...nextAnalyses })
+        setAnalysisProgress({ completed: index + 1, total: itemsToAnalyze.length })
+      }
+
+      const detectedFaceCount = Object.values(nextAnalyses).reduce(
+        (total, analysis) => total + analysis.faces.length,
+        0,
+      )
+
+      setStatusMessage(
+        failedCount > 0
+          ? `${itemsToAnalyze.length}장 중 ${failedCount}장은 분석하지 못했어요. 나머지 사진에서 얼굴 ${detectedFaceCount}개를 찾았어요.`
+          : `${itemsToAnalyze.length}장에서 얼굴 ${detectedFaceCount}개를 찾았어요. 테두리를 확인해 주세요.`,
+      )
+    } finally {
+      setIsAnalyzing(false)
+    }
   }
 
   const handleShare = async () => {
@@ -536,14 +602,23 @@ function App() {
                   type="button"
                   className="primary-button"
                   onClick={() => classifyInputRef.current?.click()}
+                  disabled={isAnalyzing}
                 >
                   사진 선택하기
                 </button>
                 <button
                   type="button"
+                  className="analysis-button"
+                  onClick={() => void handleAnalyzeFaces()}
+                  disabled={selectedFiles.length === 0 || isAnalyzing}
+                >
+                  {isAnalyzing ? '분석 중…' : '얼굴 찾기'}
+                </button>
+                <button
+                  type="button"
                   className="secondary-button"
                   onClick={handleClearClassification}
-                  disabled={selectedFiles.length === 0}
+                  disabled={selectedFiles.length === 0 || isAnalyzing}
                 >
                   전체 지우기
                 </button>
@@ -551,7 +626,7 @@ function App() {
                   type="button"
                   className="share-button"
                   onClick={handleShare}
-                  disabled={selectedFiles.length === 0}
+                  disabled={selectedFiles.length === 0 || isAnalyzing}
                 >
                   카카오톡으로 공유
                 </button>
@@ -571,26 +646,71 @@ function App() {
                 <p className="hint">여러 장을 한 번에 고르면 미리보기가 바로 추가돼요.</p>
               </div>
 
+              {isAnalyzing ? (
+                <div className="analysis-progress" role="status" aria-live="polite">
+                  <span
+                    className="analysis-progress-bar"
+                    style={{
+                      width: `${analysisProgress.total > 0 ? (analysisProgress.completed / analysisProgress.total) * 100 : 0}%`,
+                    }}
+                  />
+                  <p>
+                    {analysisProgress.completed} / {analysisProgress.total}장 분석 중
+                  </p>
+                </div>
+              ) : null}
+
               {statusMessage ? <p className="status-message">{statusMessage}</p> : null}
             </section>
 
             <section className="preview-card" aria-live="polite">
               {previewItems.length > 0 ? (
                 <div className="preview-grid">
-                  {previewItems.map(({ file, url, id }) => (
-                    <article className="preview-tile" key={id}>
-                      <button
-                        type="button"
-                        className="remove-photo-button"
-                        onClick={() => handleRemoveClassificationItem(id)}
-                        aria-label={`${file.name} 삭제`}
-                      >
-                        ×
-                      </button>
-                      <img src={url} alt={file.name} />
-                      <p>{file.name}</p>
-                    </article>
-                  ))}
+                  {previewItems.map(({ file, url, id }) => {
+                    const analysis = faceAnalyses[id]
+
+                    return (
+                      <article className="preview-tile" key={id}>
+                        <button
+                          type="button"
+                          className="remove-photo-button"
+                          onClick={() => handleRemoveClassificationItem(id)}
+                          aria-label={`${file.name} 삭제`}
+                          disabled={isAnalyzing}
+                        >
+                          ×
+                        </button>
+                        <div className="analysis-image-frame">
+                          <img src={url} alt={file.name} />
+                          {analysis?.faces.map((face, faceIndex) => (
+                            <span
+                              className="face-box"
+                              key={`${id}-face-${faceIndex}`}
+                              title={`얼굴 인식 신뢰도 ${Math.round(face.score * 100)}%`}
+                              style={{
+                                left: `${face.x * 100}%`,
+                                top: `${face.y * 100}%`,
+                                width: `${face.width * 100}%`,
+                                height: `${face.height * 100}%`,
+                              }}
+                            >
+                              <span>{faceIndex + 1}</span>
+                            </span>
+                          ))}
+                        </div>
+                        {analysis ? (
+                          <div className={`face-result ${analysis.error ? 'failed' : ''}`}>
+                            {analysis.error
+                              ? '분석 실패'
+                              : analysis.faces.length > 0
+                                ? `얼굴 ${analysis.faces.length}개 · ${analysis.durationMs}ms`
+                                : '얼굴을 찾지 못했어요'}
+                          </div>
+                        ) : null}
+                        <p>{file.name}</p>
+                      </article>
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="empty-state">
