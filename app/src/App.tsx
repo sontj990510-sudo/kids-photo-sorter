@@ -3,7 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { openDB } from 'idb'
 import { analyzeFacesInFile } from './lib/faceDetection'
 import type { DetectedFaceBox } from './lib/faceDetection'
-import { matchFaceEmbedding } from './lib/faceMatching'
+import { addLearnedFaceEmbedding, matchFaceEmbedding } from './lib/faceMatching'
 import type { FaceMatch, FaceProfileRecord } from './lib/faceMatching'
 import './App.css'
 
@@ -14,6 +14,7 @@ type PreviewItem = {
 }
 
 type AnalyzedFace = DetectedFaceBox & {
+  embedding?: number[]
   match: FaceMatch
 }
 
@@ -73,6 +74,8 @@ function App() {
     total: 0,
   })
   const [faceAnalyses, setFaceAnalyses] = useState<Record<string, FaceAnalysis>>({})
+  const [learningSelections, setLearningSelections] = useState<Record<string, string>>({})
+  const [learningFaceKey, setLearningFaceKey] = useState<string | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisProgress, setAnalysisProgress] = useState({ completed: 0, total: 0 })
 
@@ -186,7 +189,8 @@ function App() {
       const database = await openChildrenDB()
 
       for (const child of targetChildren) {
-        const embeddings: number[][] = []
+        const representativeEmbeddings: number[][] = []
+        const learnedEmbeddings = faceProfiles[child.id]?.learnedEmbeddings ?? []
         let skippedPhotoCount = 0
 
         for (const photoFile of child.photoFiles) {
@@ -201,7 +205,7 @@ function App() {
             const onlyFace = analysis.faces.length === 1 ? analysis.faces[0] : undefined
 
             if (onlyFace?.embedding && onlyFace.embedding.length > 0) {
-              embeddings.push(onlyFace.embedding)
+              representativeEmbeddings.push(onlyFace.embedding)
             } else {
               skippedPhotoCount += 1
             }
@@ -217,10 +221,12 @@ function App() {
           })
         }
 
-        if (embeddings.length > 0) {
+        if (representativeEmbeddings.length > 0 || learnedEmbeddings.length > 0) {
           const profile: FaceProfileRecord = {
             childId: child.id,
-            embeddings,
+            representativeEmbeddings,
+            learnedEmbeddings,
+            embeddings: [...representativeEmbeddings, ...learnedEmbeddings],
             sourcePhotoCount: child.photoFiles.length,
             skippedPhotoCount,
             updatedAt: new Date().toISOString(),
@@ -288,6 +294,7 @@ function App() {
     setSelectedFiles((previousFiles) => [...previousFiles, ...uniqueFiles])
     setPreviewItems((previousItems) => [...previousItems, ...nextPreviewItems])
     setFaceAnalyses({})
+    setLearningSelections({})
     setAnalysisProgress({ completed: 0, total: 0 })
     setStatusMessage(`${uniqueFiles.length}장의 사진을 추가했어요.`)
     event.target.value = ''
@@ -299,6 +306,7 @@ function App() {
     setPreviewItems([])
     setSelectedFiles([])
     setFaceAnalyses({})
+    setLearningSelections({})
     setAnalysisProgress({ completed: 0, total: 0 })
     setStatusMessage('선택한 사진을 모두 비웠어요.')
   }
@@ -321,6 +329,11 @@ function App() {
       delete nextAnalyses[itemId]
       return nextAnalyses
     })
+    setLearningSelections((previousSelections) =>
+      Object.fromEntries(
+        Object.entries(previousSelections).filter(([key]) => !key.startsWith(`${itemId}:`)),
+      ),
+    )
     setStatusMessage('선택한 사진을 삭제했어요.')
   }
 
@@ -336,6 +349,7 @@ function App() {
 
     setIsAnalyzing(true)
     setFaceAnalyses({})
+    setLearningSelections({})
     setAnalysisProgress({ completed: 0, total: itemsToAnalyze.length })
     setStatusMessage(
       profilesToUse.length > 0
@@ -357,6 +371,7 @@ function App() {
               width: face.width,
               height: face.height,
               score: face.score,
+              embedding: face.embedding,
               match: matchFaceEmbedding(face.embedding, profilesToUse),
             })),
           }
@@ -393,6 +408,87 @@ function App() {
       )
     } finally {
       setIsAnalyzing(false)
+    }
+  }
+
+  const handleLearnFace = async (itemId: string, faceIndex: number, childId: string) => {
+    const child = children.find((candidate) => candidate.id === childId)
+    const face = faceAnalyses[itemId]?.faces[faceIndex]
+    const faceKey = `${itemId}:${faceIndex}`
+
+    if (!child || !face?.embedding || learningFaceKey) {
+      setStatusMessage('학습할 얼굴과 아이를 다시 선택해 주세요.')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `이 얼굴을 ${child.name}(으)로 지정하고 추가 학습할까요?\n\n` +
+        '잘못 지정하면 이후 분류 정확도가 낮아질 수 있으므로 얼굴을 꼭 확인해 주세요.',
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setLearningFaceKey(faceKey)
+
+    try {
+      const { profile, added } = addLearnedFaceEmbedding(
+        faceProfiles[child.id],
+        child.id,
+        face.embedding,
+        child.photoFiles.length,
+      )
+      const database = await openChildrenDB()
+      await database.put(FACE_PROFILES_STORE_NAME, profile)
+
+      const nextProfiles = {
+        ...faceProfiles,
+        [child.id]: profile,
+      }
+      const profilesToUse = Object.values(nextProfiles)
+
+      setFaceProfiles(nextProfiles)
+      setFaceAnalyses((previousAnalyses) =>
+        Object.fromEntries(
+          Object.entries(previousAnalyses).map(([analysisItemId, analysis]) => [
+            analysisItemId,
+            {
+              ...analysis,
+              faces: analysis.faces.map((analyzedFace, analyzedFaceIndex) => ({
+                ...analyzedFace,
+                match:
+                  analysisItemId === itemId && analyzedFaceIndex === faceIndex
+                    ? {
+                        status: 'matched',
+                        childId: child.id,
+                        suggestedChildId: child.id,
+                        similarity: 1,
+                        secondBestSimilarity: 0,
+                      }
+                    : matchFaceEmbedding(analyzedFace.embedding, profilesToUse),
+              })),
+            },
+          ]),
+        ),
+      )
+      setLearningSelections((previousSelections) => ({
+        ...previousSelections,
+        [faceKey]: child.id,
+      }))
+      setStatusMessage(
+        added
+          ? `${child.name} 얼굴을 추가 학습했어요. 현재 사진들도 새 정보로 다시 분류했어요.`
+          : `이미 학습된 ${child.name} 얼굴이에요. 이 사진의 분류만 확인했어요.`,
+      )
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? `추가 학습을 저장하지 못했어요. ${error.message}`
+          : '추가 학습을 저장하지 못했어요.',
+      )
+    } finally {
+      setLearningFaceKey(null)
     }
   }
 
@@ -550,7 +646,20 @@ function App() {
       }
 
       await database.put(CHILDREN_STORE_NAME, payload)
-      await database.delete(FACE_PROFILES_STORE_NAME, payload.id)
+      const learnedEmbeddings = faceProfiles[payload.id]?.learnedEmbeddings ?? []
+      if (editingChildId && learnedEmbeddings.length > 0) {
+        await database.put(FACE_PROFILES_STORE_NAME, {
+          childId: payload.id,
+          representativeEmbeddings: [],
+          learnedEmbeddings,
+          embeddings: learnedEmbeddings,
+          sourcePhotoCount: payload.photoFiles.length,
+          skippedPhotoCount: 0,
+          updatedAt: now,
+        } satisfies FaceProfileRecord)
+      } else {
+        await database.delete(FACE_PROFILES_STORE_NAME, payload.id)
+      }
       setFaceAnalyses({})
       await loadChildren()
       setChildName('')
@@ -640,9 +749,12 @@ function App() {
       ),
     }))
     .filter((group) => group.items.length > 0)
-  const reviewItems = previewItems.filter((item) =>
-    faceAnalyses[item.id]?.faces.some((face) => face.match.status === 'review'),
-  )
+  const reviewItems = previewItems.filter((item) => {
+    const faces = faceAnalyses[item.id]?.faces ?? []
+    const hasMatchedChild = faces.some((face) => face.match.status === 'matched')
+    const hasUnidentifiedFace = faces.some((face) => face.match.status === 'review')
+    return hasUnidentifiedFace && !hasMatchedChild
+  })
   const analyzedItemCount = Object.keys(faceAnalyses).length
 
   return (
@@ -836,6 +948,11 @@ function App() {
                         {faceProfiles[child.id] ? (
                           <p className="profile-ready">
                             AI 준비 완료 · 얼굴 {faceProfiles[child.id].embeddings.length}개
+                            {faceProfiles[child.id].learnedEmbeddings?.length
+                              ? ` · 추가 학습 ${
+                                  faceProfiles[child.id].learnedEmbeddings?.length ?? 0
+                                }개`
+                              : ''}
                             {faceProfiles[child.id].skippedPhotoCount > 0
                               ? ` · ${faceProfiles[child.id].skippedPhotoCount}장 건너뜀`
                               : ''}
@@ -1025,6 +1142,53 @@ function App() {
                                 : '얼굴을 찾지 못했어요'}
                           </div>
                         ) : null}
+                        {analysis && analysis.faces.length > 0 && children.length > 0 ? (
+                          <div className="face-learning-list">
+                            {analysis.faces.map((face, faceIndex) => {
+                              const faceKey = `${id}:${faceIndex}`
+                              const selectedChildId =
+                                learningSelections[faceKey] ?? face.match.childId ?? ''
+                              const currentName = face.match.childId
+                                ? childNamesById[face.match.childId]
+                                : '확인 필요'
+
+                              return (
+                                <div className="face-learning-row" key={`${faceKey}:learning`}>
+                                  <label htmlFor={`learn-${faceKey}`}>
+                                    얼굴 {faceIndex + 1} · 현재 {currentName}
+                                  </label>
+                                  <select
+                                    id={`learn-${faceKey}`}
+                                    value={selectedChildId}
+                                    onChange={(event) =>
+                                      setLearningSelections((previousSelections) => ({
+                                        ...previousSelections,
+                                        [faceKey]: event.target.value,
+                                      }))
+                                    }
+                                    disabled={Boolean(learningFaceKey)}
+                                  >
+                                    <option value="">아이 선택</option>
+                                    {children.map((child) => (
+                                      <option value={child.id} key={child.id}>
+                                        {child.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleLearnFace(id, faceIndex, selectedChildId)
+                                    }
+                                    disabled={!selectedChildId || Boolean(learningFaceKey)}
+                                  >
+                                    {learningFaceKey === faceKey ? '학습 중…' : '지정·추가 학습'}
+                                  </button>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ) : null}
                         <p>{file.name}</p>
                       </article>
                     )
@@ -1087,12 +1251,14 @@ function App() {
                     <div className="child-result-header">
                       <div>
                         <h3>확인 필요</h3>
-                        <p>{reviewItems.length}장의 사진에서 확실하지 않은 얼굴이 발견됐어요.</p>
+                        <p>
+                          등록된 아이를 한 명도 확정하지 못한 사진이 {reviewItems.length}장 있어요.
+                        </p>
                       </div>
                     </div>
                     <p className="safety-note">
-                      이 사진들은 자동으로 어느 아이에게도 보내지 않습니다. 수동 수정 기능은 다음
-                      단계에서 추가합니다.
+                      등록된 아이가 확인된 사진은 이 목록에 중복 표시하지 않습니다. 위 사진 카드에서
+                      얼굴을 아이에게 지정하면 바로 추가 학습됩니다.
                     </p>
                     <div className="result-photo-grid">
                       {reviewItems.map((item) => (
