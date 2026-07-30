@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { openDB } from 'idb'
+import {
+  createEncryptedBackupFile,
+  readEncryptedBackupFile,
+} from './lib/backup'
+import type { BackupAppSettings } from './lib/backup'
 import { analyzeFacesInFile } from './lib/faceDetection'
 import type { DetectedFaceBox } from './lib/faceDetection'
 import {
@@ -62,10 +67,14 @@ type ChildRecord = {
 type TabKey = 'register' | 'classify'
 
 const DB_NAME = 'kids-photo-sorter-db'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const CHILDREN_STORE_NAME = 'children'
 const FACE_PROFILES_STORE_NAME = 'faceProfiles'
+const SETTINGS_STORE_NAME = 'settings'
+const SETTINGS_ID = 'app-settings'
 const MAX_PHOTOS = 10
+const MIN_CLASS_SIZE = 1
+const MAX_CLASS_SIZE = 40
 
 function formatReceiptTime(completedAt: string) {
   return new Date(completedAt).toLocaleTimeString('ko-KR', {
@@ -126,6 +135,10 @@ async function openChildrenDB() {
       if (!database.objectStoreNames.contains(FACE_PROFILES_STORE_NAME)) {
         database.createObjectStore(FACE_PROFILES_STORE_NAME, { keyPath: 'childId' })
       }
+
+      if (!database.objectStoreNames.contains(SETTINGS_STORE_NAME)) {
+        database.createObjectStore(SETTINGS_STORE_NAME, { keyPath: 'id' })
+      }
     },
   })
 }
@@ -156,11 +169,26 @@ function App() {
   const [excludedChildPhotos, setExcludedChildPhotos] = useState<Record<string, true>>({})
   const [shareReceipts, setShareReceipts] = useState<Record<string, ShareReceipt>>({})
   const [lightboxPhoto, setLightboxPhoto] = useState<LightboxPhoto | null>(null)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [onboardingStep, setOnboardingStep] = useState<number | null>(null)
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false)
+  const [classSize, setClassSize] = useState(20)
+  const [draftClassSize, setDraftClassSize] = useState(20)
+  const [lastBackupAt, setLastBackupAt] = useState<string | undefined>()
+  const [storagePersistent, setStoragePersistent] = useState<boolean | null>(null)
+  const [backupDialogOpen, setBackupDialogOpen] = useState(false)
+  const [backupPassword, setBackupPassword] = useState('')
+  const [backupPasswordConfirm, setBackupPasswordConfirm] = useState('')
+  const [restorePassword, setRestorePassword] = useState('')
+  const [restoreFile, setRestoreFile] = useState<File | null>(null)
+  const [isBackupBusy, setIsBackupBusy] = useState(false)
+  const [isOnboardingSaving, setIsOnboardingSaving] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisProgress, setAnalysisProgress] = useState({ completed: 0, total: 0 })
 
   const classifyInputRef = useRef<HTMLInputElement | null>(null)
   const registerInputRef = useRef<HTMLInputElement | null>(null)
+  const restoreInputRef = useRef<HTMLInputElement | null>(null)
   const previewItemsRef = useRef<PreviewItem[]>([])
   const activeObjectUrlsRef = useRef<string[]>([])
   const childImageUrlsRef = useRef<Record<string, string>>({})
@@ -234,9 +262,12 @@ function App() {
   const loadChildren = useCallback(async () => {
     try {
       const database = await openChildrenDB()
-      const [savedChildren, savedProfiles] = await Promise.all([
+      const [savedChildren, savedProfiles, savedSettings] = await Promise.all([
         database.getAll(CHILDREN_STORE_NAME) as Promise<ChildRecord[]>,
         database.getAll(FACE_PROFILES_STORE_NAME) as Promise<FaceProfileRecord[]>,
+        database.get(SETTINGS_STORE_NAME, SETTINGS_ID) as Promise<
+          BackupAppSettings | undefined
+        >,
       ])
       const sortedChildren = [...savedChildren].sort(
         (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
@@ -257,10 +288,27 @@ function App() {
       setFaceProfiles(
         Object.fromEntries(savedProfiles.map((profile) => [profile.childId, profile])),
       )
+      if (savedSettings) {
+        const nextClassSize = Math.min(
+          MAX_CLASS_SIZE,
+          Math.max(MIN_CLASS_SIZE, savedSettings.classSize),
+        )
+        setClassSize(nextClassSize)
+        setDraftClassSize(nextClassSize)
+        setLastBackupAt(savedSettings.lastBackupAt)
+        setOnboardingCompleted(savedSettings.onboardingCompleted)
+        setOnboardingStep(savedSettings.onboardingCompleted ? null : 0)
+      } else {
+        setOnboardingCompleted(false)
+        setOnboardingStep(0)
+      }
     } catch (error) {
       if (error instanceof Error) {
         setStatusMessage(`아이 목록을 불러오지 못했어요. ${error.message}`)
       }
+      setOnboardingStep(0)
+    } finally {
+      setSettingsLoaded(true)
     }
   }, [])
 
@@ -274,10 +322,297 @@ function App() {
     }
   }, [loadChildren])
 
+  useEffect(() => {
+    if (!settingsLoaded || !navigator.storage?.persisted) {
+      return
+    }
+
+    void navigator.storage
+      .persisted()
+      .then((persistent) => setStoragePersistent(persistent))
+      .catch(() => setStoragePersistent(null))
+  }, [settingsLoaded])
+
+  useEffect(() => {
+    if (!backupDialogOpen && onboardingStep === null) {
+      return
+    }
+
+    const previousOverflow = document.body.style.overflow
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return
+      }
+
+      if (backupDialogOpen) {
+        setBackupDialogOpen(false)
+      } else if (onboardingCompleted) {
+        setOnboardingStep(null)
+      }
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [backupDialogOpen, onboardingCompleted, onboardingStep])
+
   const clearDraftPreview = () => {
     setLightboxPhoto(null)
     draftPreviewItems.forEach(({ url }) => revokeObjectUrl(url))
     setDraftPreviewItems([])
+  }
+
+  const saveAppSettings = async (
+    nextSettings: Omit<BackupAppSettings, 'id' | 'updatedAt'>,
+  ) => {
+    const database = await openChildrenDB()
+    const settings: BackupAppSettings = {
+      id: SETTINGS_ID,
+      ...nextSettings,
+      updatedAt: new Date().toISOString(),
+    }
+
+    await database.put(SETTINGS_STORE_NAME, settings)
+    setClassSize(settings.classSize)
+    setDraftClassSize(settings.classSize)
+    setLastBackupAt(settings.lastBackupAt)
+    setOnboardingCompleted(settings.onboardingCompleted)
+    return settings
+  }
+
+  const requestPersistentStorage = async () => {
+    if (!navigator.storage?.persist) {
+      setStoragePersistent(null)
+      return false
+    }
+
+    try {
+      const persistent = await navigator.storage.persist()
+      setStoragePersistent(persistent)
+      return persistent
+    } catch {
+      setStoragePersistent(null)
+      return false
+    }
+  }
+
+  const handleFinishOnboarding = async () => {
+    if (isOnboardingSaving) {
+      return
+    }
+
+    const nextClassSize = Math.min(
+      MAX_CLASS_SIZE,
+      Math.max(MIN_CLASS_SIZE, Math.round(draftClassSize)),
+    )
+    setIsOnboardingSaving(true)
+
+    try {
+      await saveAppSettings({
+        onboardingCompleted: true,
+        classSize: nextClassSize,
+        lastBackupAt,
+      })
+      const persistent = await requestPersistentStorage()
+      setOnboardingStep(null)
+      setActiveTab('register')
+      setStatusMessage(
+        persistent
+          ? `${nextClassSize}명 반으로 시작할게요. 이 아이폰의 영구 저장도 준비됐어요.`
+          : `${nextClassSize}명 반으로 시작할게요. 중요한 데이터는 백업 파일로도 보관해 주세요.`,
+      )
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? `시작 설정을 저장하지 못했어요. ${error.message}`
+          : '시작 설정을 저장하지 못했어요.',
+      )
+    } finally {
+      setIsOnboardingSaving(false)
+    }
+  }
+
+  const openOnboardingGuide = () => {
+    setDraftClassSize(classSize)
+    setOnboardingStep(0)
+  }
+
+  const openBackupDialog = () => {
+    setBackupPassword('')
+    setBackupPasswordConfirm('')
+    setRestorePassword('')
+    setRestoreFile(null)
+    setBackupDialogOpen(true)
+  }
+
+  const recordBackupCompletion = async () => {
+    const completedAt = new Date().toISOString()
+    await saveAppSettings({
+      onboardingCompleted: true,
+      classSize,
+      lastBackupAt: completedAt,
+    })
+    return completedAt
+  }
+
+  const handleCreateBackup = async () => {
+    if (isBackupBusy) {
+      return
+    }
+
+    if (backupPassword.length < 6) {
+      setStatusMessage('백업 비밀번호는 6자 이상으로 입력해 주세요.')
+      return
+    }
+
+    if (backupPassword !== backupPasswordConfirm) {
+      setStatusMessage('백업 비밀번호 두 개가 서로 달라요.')
+      return
+    }
+
+    setIsBackupBusy(true)
+    setStatusMessage('대표사진과 얼굴 학습 정보를 안전하게 암호화하고 있어요.')
+
+    try {
+      const settings: BackupAppSettings = {
+        id: SETTINGS_ID,
+        onboardingCompleted: true,
+        classSize,
+        lastBackupAt,
+        updatedAt: new Date().toISOString(),
+      }
+      const backupFile = await createEncryptedBackupFile(
+        {
+          format: 'giving-tree-backup',
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          children,
+          faceProfiles: Object.values(faceProfiles),
+          settings,
+        },
+        backupPassword,
+      )
+      const sharePayload = {
+        files: [backupFile],
+        title: 'Giving Tree 암호화 백업',
+        text: '이 파일을 iCloud Drive에 안전하게 보관해 주세요.',
+      }
+
+      if (navigator.canShare?.(sharePayload)) {
+        await navigator.share(sharePayload)
+      } else {
+        const downloadUrl = URL.createObjectURL(backupFile)
+        const anchor = document.createElement('a')
+        anchor.href = downloadUrl
+        anchor.download = backupFile.name
+        anchor.click()
+        window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
+      }
+
+      const completedAt = await recordBackupCompletion()
+      setBackupPassword('')
+      setBackupPasswordConfirm('')
+      setStatusMessage(
+        `암호화 백업을 만들었어요. ${new Date(completedAt).toLocaleString('ko-KR')} · iCloud Drive에 저장했는지 확인해 주세요.`,
+      )
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        setStatusMessage('백업 파일 저장을 취소했어요.')
+      } else {
+        setStatusMessage(
+          error instanceof Error
+            ? `백업 파일을 만들지 못했어요. ${error.message}`
+            : '백업 파일을 만들지 못했어요.',
+        )
+      }
+    } finally {
+      setIsBackupBusy(false)
+    }
+  }
+
+  const handleSelectRestoreFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null
+    setRestoreFile(file)
+    setStatusMessage(file ? `${file.name} 파일을 선택했어요.` : '')
+    event.target.value = ''
+  }
+
+  const handleRestoreBackup = async () => {
+    if (isBackupBusy) {
+      return
+    }
+
+    if (!restoreFile) {
+      setStatusMessage('복원할 Giving Tree 백업 파일을 먼저 선택해 주세요.')
+      return
+    }
+
+    if (!restorePassword) {
+      setStatusMessage('백업할 때 사용한 비밀번호를 입력해 주세요.')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `현재 아이 정보와 얼굴 학습 데이터를 백업 파일 내용으로 바꿀까요?\n\n` +
+        '현재 데이터가 필요하다면 먼저 새 백업을 만들어 주세요.',
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setIsBackupBusy(true)
+    setStatusMessage('백업 비밀번호를 확인하고 데이터를 복원하고 있어요.')
+
+    try {
+      const backup = await readEncryptedBackupFile(restoreFile, restorePassword)
+      const database = await openChildrenDB()
+      const transaction = database.transaction(
+        [CHILDREN_STORE_NAME, FACE_PROFILES_STORE_NAME, SETTINGS_STORE_NAME],
+        'readwrite',
+      )
+      const childrenStore = transaction.objectStore(CHILDREN_STORE_NAME)
+      const profilesStore = transaction.objectStore(FACE_PROFILES_STORE_NAME)
+      const settingsStore = transaction.objectStore(SETTINGS_STORE_NAME)
+
+      const restoreOperations = [
+        childrenStore.clear(),
+        profilesStore.clear(),
+        settingsStore.clear(),
+        ...backup.children.map((child) => childrenStore.put(child)),
+        ...backup.faceProfiles.map((profile) => profilesStore.put(profile)),
+        settingsStore.put({
+          ...backup.settings,
+          id: SETTINGS_ID,
+          onboardingCompleted: true,
+          updatedAt: new Date().toISOString(),
+        } satisfies BackupAppSettings),
+      ]
+      await Promise.all(restoreOperations)
+      await transaction.done
+
+      handleClearClassification()
+      clearDraftPreview()
+      setBackupDialogOpen(false)
+      setRestorePassword('')
+      setRestoreFile(null)
+      await loadChildren()
+      setStatusMessage(
+        `백업 복원이 완료됐어요. 아이 ${backup.children.length}명의 정보를 불러왔어요.`,
+      )
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? `백업을 복원하지 못했어요. ${error.message}`
+          : '백업을 복원하지 못했어요.',
+      )
+    } finally {
+      setIsBackupBusy(false)
+    }
   }
 
   const handlePrepareProfiles = async (targetChildren: ChildRecord[]) => {
@@ -1101,6 +1436,18 @@ function App() {
   ).length
   const unconfirmedPhotoCount = previewItems.length - confirmedPhotoCount
   const analyzedItemCount = Object.keys(faceAnalyses).length
+  const classProgress = Math.min(100, (children.length / Math.max(1, classSize)) * 100)
+
+  if (!settingsLoaded) {
+    return (
+      <main className="app-loading-screen" aria-live="polite">
+        <div className="loading-tree">
+          <GivingTreeMark />
+        </div>
+        <p>Giving Tree를 준비하고 있어요…</p>
+      </main>
+    )
+  }
 
   return (
     <main className="photo-sorter-app">
@@ -1138,6 +1485,28 @@ function App() {
             <span aria-hidden="true">🍃</span> 사진 분류
           </button>
         </nav>
+
+        <section className="utility-bar" aria-label="반 현황과 앱 관리">
+          <div className="class-progress-summary">
+            <div className="class-progress-copy">
+              <span>우리 반 나무</span>
+              <strong>
+                {children.length} / {classSize}명
+              </strong>
+            </div>
+            <div className="class-progress-track" aria-hidden="true">
+              <span style={{ width: `${classProgress}%` }} />
+            </div>
+          </div>
+          <div className="utility-actions">
+            <button type="button" onClick={openBackupDialog}>
+              <span aria-hidden="true">🔐</span> 백업·복원
+            </button>
+            <button type="button" onClick={openOnboardingGuide}>
+              <span aria-hidden="true">?</span> 사용 안내
+            </button>
+          </div>
+        </section>
 
         {activeTab === 'register' ? (
           <section className="register-section">
@@ -1258,7 +1627,7 @@ function App() {
                 <div className="form-copy">
                   <h2>등록한 아이 목록</h2>
                   <p>
-                    AI 준비 완료 {preparedChildCount}명 / 전체 {children.length}명
+                    반 등록 {children.length}/{classSize}명 · AI 준비 완료 {preparedChildCount}명
                   </p>
                 </div>
                 <button
@@ -1816,6 +2185,351 @@ function App() {
           </section>
         )}
       </section>
+      {onboardingStep !== null ? (
+        <div className="onboarding-overlay" role="dialog" aria-modal="true">
+          <article className="onboarding-card">
+            <header className="onboarding-header">
+              <div>
+                <p>GIVING TREE ADVENTURE</p>
+                <span>STEP {onboardingStep + 1} / 4</span>
+              </div>
+              {onboardingCompleted ? (
+                <button
+                  type="button"
+                  className="onboarding-close-button"
+                  onClick={() => setOnboardingStep(null)}
+                  aria-label="사용 안내 닫기"
+                >
+                  ×
+                </button>
+              ) : null}
+            </header>
+
+            <div className="onboarding-progress" aria-hidden="true">
+              {[0, 1, 2, 3].map((step) => (
+                <span
+                  className={step <= onboardingStep ? 'active' : ''}
+                  key={`onboarding-progress-${step}`}
+                />
+              ))}
+            </div>
+
+            <div className="onboarding-content">
+              {onboardingStep === 0 ? (
+                <section className="onboarding-welcome">
+                  <div className="onboarding-tree">
+                    <GivingTreeMark />
+                  </div>
+                  <p className="onboarding-kicker">WELCOME TO GIVING TREE</p>
+                  <h2>아이들의 오늘을<br />예쁘게 키워볼까요?</h2>
+                  <p>
+                    사진은 이 아이폰 안에서만 정리돼요. 처음 사용하는 방법을 짧고 쉽게
+                    알려드릴게요.
+                  </p>
+                </section>
+              ) : null}
+
+              {onboardingStep === 1 ? (
+                <section className="onboarding-guide">
+                  <p className="onboarding-kicker">HOW TO PLAY</p>
+                  <h2>세 단계면 사진 정리 끝!</h2>
+                  <div className="guide-quest-list">
+                    <div className="guide-quest">
+                      <span>1</span>
+                      <div>
+                        <strong>아이 등록</strong>
+                        <p>선명한 대표사진으로 우리 반 친구를 등록해요.</p>
+                      </div>
+                    </div>
+                    <div className="guide-quest">
+                      <span>2</span>
+                      <div>
+                        <strong>사진 분류</strong>
+                        <p>여러 장을 골라 아이별 사진 묶음을 만들어요.</p>
+                      </div>
+                    </div>
+                    <div className="guide-quest">
+                      <span>3</span>
+                      <div>
+                        <strong>확인하고 공유</strong>
+                        <p>직접 한 번 확인한 뒤 카카오톡으로 보내요.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="privacy-chip">🔒 사진과 얼굴 정보는 서버에 올리지 않아요</div>
+                </section>
+              ) : null}
+
+              {onboardingStep === 2 ? (
+                <section className="onboarding-class-size">
+                  <p className="onboarding-kicker">SET YOUR CLASS</p>
+                  <h2>우리 반은 몇 명인가요?</h2>
+                  <p>등록 진행률과 준비 상태를 보기 쉽게 표시해 드릴게요.</p>
+                  <div className="class-size-picker">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraftClassSize((current) =>
+                          Math.max(MIN_CLASS_SIZE, current - 1),
+                        )
+                      }
+                      disabled={draftClassSize <= MIN_CLASS_SIZE}
+                      aria-label="반 인원 한 명 줄이기"
+                    >
+                      −
+                    </button>
+                    <label>
+                      <input
+                        type="number"
+                        min={MIN_CLASS_SIZE}
+                        max={MAX_CLASS_SIZE}
+                        value={draftClassSize}
+                        onChange={(event) =>
+                          setDraftClassSize(
+                            Math.min(
+                              MAX_CLASS_SIZE,
+                              Math.max(MIN_CLASS_SIZE, Number(event.target.value) || 1),
+                            ),
+                          )
+                        }
+                        aria-label="반 인원"
+                      />
+                      <span>명</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraftClassSize((current) =>
+                          Math.min(MAX_CLASS_SIZE, current + 1),
+                        )
+                      }
+                      disabled={draftClassSize >= MAX_CLASS_SIZE}
+                      aria-label="반 인원 한 명 늘리기"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="class-size-presets">
+                    {[15, 20, 25, 30].map((size) => (
+                      <button
+                        type="button"
+                        className={draftClassSize === size ? 'active' : ''}
+                        onClick={() => setDraftClassSize(size)}
+                        key={size}
+                      >
+                        {size}명
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {onboardingStep === 3 ? (
+                <section className="onboarding-ready">
+                  <div className="ready-badge" aria-hidden="true">✓</div>
+                  <p className="onboarding-kicker">READY TO GROW</p>
+                  <h2>{draftClassSize}명의<br />Giving Tree가 준비됐어요!</h2>
+                  <div className="ready-summary">
+                    <span>🌱 아이를 등록하고</span>
+                    <span>🍃 사진을 분류한 뒤</span>
+                    <span>💚 직접 확인하고 공유해요</span>
+                  </div>
+                  <p className="ready-backup-note">
+                    Safari의 공유 버튼에서 `홈 화면에 추가`를 선택하면 앱처럼 열 수 있어요.
+                    중요한 데이터는 `백업·복원`에서 iCloud Drive에 보관해 주세요.
+                  </p>
+                </section>
+              ) : null}
+            </div>
+
+            {statusMessage && onboardingStep === 3 ? (
+              <p className="modal-status-message">{statusMessage}</p>
+            ) : null}
+
+            <footer className="onboarding-actions">
+              {onboardingStep > 0 ? (
+                <button
+                  type="button"
+                  className="onboarding-back-button"
+                  onClick={() => setOnboardingStep((current) => Math.max(0, (current ?? 1) - 1))}
+                  disabled={isOnboardingSaving}
+                >
+                  이전
+                </button>
+              ) : <span />}
+              <button
+                type="button"
+                className="onboarding-next-button"
+                onClick={() => {
+                  if (onboardingStep === 3) {
+                    void handleFinishOnboarding()
+                  } else {
+                    setOnboardingStep((current) => Math.min(3, (current ?? 0) + 1))
+                  }
+                }}
+                disabled={isOnboardingSaving}
+              >
+                {isOnboardingSaving
+                  ? '저장 중…'
+                  : onboardingStep === 0
+                    ? '설명 보러 가기'
+                    : onboardingStep === 3
+                      ? 'Giving Tree 시작하기'
+                      : '다음'}
+              </button>
+            </footer>
+          </article>
+        </div>
+      ) : null}
+
+      {backupDialogOpen ? (
+        <div
+          className="backup-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Giving Tree 데이터 백업과 복원"
+          onClick={() => {
+            if (!isBackupBusy) {
+              setBackupDialogOpen(false)
+            }
+          }}
+        >
+          <article className="backup-card" onClick={(event) => event.stopPropagation()}>
+            <header className="backup-header">
+              <div>
+                <p>PRIVATE DATA VAULT</p>
+                <h2>백업·복원</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBackupDialogOpen(false)}
+                disabled={isBackupBusy}
+                aria-label="백업 화면 닫기"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="backup-summary-grid">
+              <div>
+                <span>등록한 아이</span>
+                <strong>{children.length}명</strong>
+              </div>
+              <div>
+                <span>저장 상태</span>
+                <strong>
+                  {storagePersistent === true
+                    ? '영구 저장'
+                    : storagePersistent === false
+                      ? '일반 저장'
+                      : '확인 필요'}
+                </strong>
+              </div>
+              <div>
+                <span>최근 백업</span>
+                <strong>
+                  {lastBackupAt
+                    ? new Date(lastBackupAt).toLocaleDateString('ko-KR')
+                    : '아직 없음'}
+                </strong>
+              </div>
+            </div>
+
+            <section className="backup-section">
+              <div className="backup-section-copy">
+                <span className="backup-step-icon" aria-hidden="true">↓</span>
+                <div>
+                  <h3>암호화 백업 만들기</h3>
+                  <p>아이 정보·대표사진·얼굴 학습 정보를 비밀번호로 보호해 저장해요.</p>
+                </div>
+              </div>
+              <label className="backup-field">
+                백업 비밀번호
+                <input
+                  type="password"
+                  value={backupPassword}
+                  onChange={(event) => setBackupPassword(event.target.value)}
+                  placeholder="6자 이상"
+                  autoComplete="new-password"
+                  disabled={isBackupBusy}
+                />
+              </label>
+              <label className="backup-field">
+                비밀번호 한 번 더
+                <input
+                  type="password"
+                  value={backupPasswordConfirm}
+                  onChange={(event) => setBackupPasswordConfirm(event.target.value)}
+                  placeholder="같은 비밀번호 입력"
+                  autoComplete="new-password"
+                  disabled={isBackupBusy}
+                />
+              </label>
+              <p className="backup-warning">
+                비밀번호는 복구할 수 없어요. 기억할 수 있는 비밀번호를 사용하고, 만들어진
+                파일은 공유 화면에서 `파일에 저장` → `iCloud Drive`를 선택하세요.
+              </p>
+              <button
+                type="button"
+                className="backup-primary-button"
+                onClick={() => void handleCreateBackup()}
+                disabled={isBackupBusy}
+              >
+                {isBackupBusy ? '처리 중…' : '암호화 백업 파일 만들기'}
+              </button>
+            </section>
+
+            <section className="backup-section restore-section">
+              <div className="backup-section-copy">
+                <span className="backup-step-icon" aria-hidden="true">↑</span>
+                <div>
+                  <h3>백업에서 복원하기</h3>
+                  <p>새 아이폰이나 데이터가 사라졌을 때 저장해 둔 파일을 불러와요.</p>
+                </div>
+              </div>
+              <input
+                ref={restoreInputRef}
+                type="file"
+                accept=".givingtree,application/octet-stream"
+                onChange={handleSelectRestoreFile}
+                hidden
+              />
+              <button
+                type="button"
+                className="backup-file-button"
+                onClick={() => restoreInputRef.current?.click()}
+                disabled={isBackupBusy}
+              >
+                {restoreFile ? `✓ ${restoreFile.name}` : 'Giving Tree 백업 파일 선택'}
+              </button>
+              <label className="backup-field">
+                백업 비밀번호
+                <input
+                  type="password"
+                  value={restorePassword}
+                  onChange={(event) => setRestorePassword(event.target.value)}
+                  placeholder="백업할 때 사용한 비밀번호"
+                  autoComplete="current-password"
+                  disabled={isBackupBusy}
+                />
+              </label>
+              <button
+                type="button"
+                className="restore-button"
+                onClick={() => void handleRestoreBackup()}
+                disabled={isBackupBusy || !restoreFile}
+              >
+                선택한 백업 복원하기
+              </button>
+            </section>
+
+            {statusMessage ? (
+              <p className="modal-status-message" role="status">{statusMessage}</p>
+            ) : null}
+          </article>
+        </div>
+      ) : null}
+
       {lightboxPhoto ? (
         <div
           className="photo-lightbox"
