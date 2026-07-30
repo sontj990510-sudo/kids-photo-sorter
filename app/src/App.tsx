@@ -76,6 +76,7 @@ function App() {
   const [faceAnalyses, setFaceAnalyses] = useState<Record<string, FaceAnalysis>>({})
   const [learningSelections, setLearningSelections] = useState<Record<string, string>>({})
   const [learningFaceKey, setLearningFaceKey] = useState<string | null>(null)
+  const [excludedChildPhotos, setExcludedChildPhotos] = useState<Record<string, true>>({})
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisProgress, setAnalysisProgress] = useState({ completed: 0, total: 0 })
 
@@ -177,6 +178,7 @@ function App() {
 
     setIsPreparingProfiles(true)
     setFaceAnalyses({})
+    setExcludedChildPhotos({})
     setAnalysisProgress({ completed: 0, total: 0 })
     setProfileProgress({
       label: '얼굴 인식 모델을 준비하고 있어요.',
@@ -295,6 +297,7 @@ function App() {
     setPreviewItems((previousItems) => [...previousItems, ...nextPreviewItems])
     setFaceAnalyses({})
     setLearningSelections({})
+    setExcludedChildPhotos({})
     setAnalysisProgress({ completed: 0, total: 0 })
     setStatusMessage(`${uniqueFiles.length}장의 사진을 추가했어요.`)
     event.target.value = ''
@@ -307,6 +310,7 @@ function App() {
     setSelectedFiles([])
     setFaceAnalyses({})
     setLearningSelections({})
+    setExcludedChildPhotos({})
     setAnalysisProgress({ completed: 0, total: 0 })
     setStatusMessage('선택한 사진을 모두 비웠어요.')
   }
@@ -334,6 +338,13 @@ function App() {
         Object.entries(previousSelections).filter(([key]) => !key.startsWith(`${itemId}:`)),
       ),
     )
+    setExcludedChildPhotos((previousExclusions) =>
+      Object.fromEntries(
+        Object.entries(previousExclusions).filter(
+          ([key]) => !key.endsWith(`::${itemId}`),
+        ),
+      ),
+    )
     setStatusMessage('선택한 사진을 삭제했어요.')
   }
 
@@ -350,6 +361,7 @@ function App() {
     setIsAnalyzing(true)
     setFaceAnalyses({})
     setLearningSelections({})
+    setExcludedChildPhotos({})
     setAnalysisProgress({ completed: 0, total: itemsToAnalyze.length })
     setStatusMessage(
       profilesToUse.length > 0
@@ -476,6 +488,11 @@ function App() {
         ...previousSelections,
         [faceKey]: child.id,
       }))
+      setExcludedChildPhotos((previousExclusions) => {
+        const nextExclusions = { ...previousExclusions }
+        delete nextExclusions[`${child.id}::${itemId}`]
+        return nextExclusions
+      })
       setStatusMessage(
         added
           ? `${child.name} 얼굴을 추가 학습했어요. 현재 사진들도 새 정보로 다시 분류했어요.`
@@ -661,6 +678,7 @@ function App() {
         await database.delete(FACE_PROFILES_STORE_NAME, payload.id)
       }
       setFaceAnalyses({})
+      setExcludedChildPhotos({})
       await loadChildren()
       setChildName('')
       clearDraftPreview()
@@ -731,6 +749,7 @@ function App() {
         return nextProfiles
       })
       setFaceAnalyses({})
+      setExcludedChildPhotos({})
       setStatusMessage('아이 정보를 삭제했어요.')
     } catch (error) {
       if (error instanceof Error) {
@@ -739,16 +758,45 @@ function App() {
     }
   }
 
+  const handleExcludeChildPhoto = (child: ChildRecord, item: PreviewItem) => {
+    setExcludedChildPhotos((previousExclusions) => ({
+      ...previousExclusions,
+      [`${child.id}::${item.id}`]: true,
+    }))
+    setStatusMessage(
+      `${item.file.name} 사진을 ${child.name} 공유 목록에서 제외했어요. 원본 사진은 삭제되지 않았어요.`,
+    )
+  }
+
+  const handleRestoreChildPhotos = (child: ChildRecord) => {
+    setExcludedChildPhotos((previousExclusions) =>
+      Object.fromEntries(
+        Object.entries(previousExclusions).filter(
+          ([key]) => !key.startsWith(`${child.id}::`),
+        ),
+      ),
+    )
+    setStatusMessage(`${child.name} 목록에서 제외했던 사진을 다시 포함했어요.`)
+  }
+
   const childNamesById = Object.fromEntries(children.map((child) => [child.id, child.name]))
   const preparedChildCount = children.filter((child) => faceProfiles[child.id]).length
   const groupedChildResults = children
-    .map((child) => ({
-      child,
-      items: previewItems.filter((item) =>
+    .map((child) => {
+      const allItems = previewItems.filter((item) =>
         faceAnalyses[item.id]?.faces.some((face) => face.match.childId === child.id),
-      ),
-    }))
-    .filter((group) => group.items.length > 0)
+      )
+      const items = allItems.filter(
+        (item) => !excludedChildPhotos[`${child.id}::${item.id}`],
+      )
+
+      return {
+        child,
+        items,
+        excludedCount: allItems.length - items.length,
+      }
+    })
+    .filter((group) => group.items.length > 0 || group.excludedCount > 0)
   const reviewItems = previewItems.filter((item) => {
     const faces = faceAnalyses[item.id]?.faces ?? []
     const hasMatchedChild = faces.some((face) => face.match.status === 'matched')
@@ -1110,7 +1158,7 @@ function App() {
                             const matchedName = face.match.childId
                               ? childNamesById[face.match.childId]
                               : undefined
-                            const label = matchedName ?? '확인'
+                            const label = `${faceIndex + 1} · ${matchedName ?? '확인'}`
 
                             return (
                               <span
@@ -1213,28 +1261,53 @@ function App() {
                 </div>
 
                 {groupedChildResults.length > 0 ? (
-                  groupedChildResults.map(({ child, items }) => (
+                  groupedChildResults.map(({ child, items, excludedCount }) => (
                     <article className="child-result-card" key={child.id}>
                       <div className="child-result-header">
                         <div>
                           <h3>{child.name}</h3>
-                          <p>{items.length}장의 사진</p>
+                          <p>
+                            공유할 사진 {items.length}장
+                            {excludedCount > 0 ? ` · ${excludedCount}장 제외됨` : ''}
+                          </p>
                         </div>
-                        <button
-                          type="button"
-                          className="share-button result-share-button"
-                          onClick={() => void handleShareChildPhotos(child, items)}
-                          disabled={isAnalyzing}
-                        >
-                          {child.name} 사진 공유
-                        </button>
+                        <div className="child-result-actions">
+                          {excludedCount > 0 ? (
+                            <button
+                              type="button"
+                              className="result-restore-button"
+                              onClick={() => handleRestoreChildPhotos(child)}
+                            >
+                              제외 취소
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="share-button result-share-button"
+                            onClick={() => void handleShareChildPhotos(child, items)}
+                            disabled={isAnalyzing || items.length === 0}
+                          >
+                            {child.name} 사진 공유
+                          </button>
+                        </div>
                       </div>
                       <p className="safety-note">
-                        보내기 전에 다른 아이 사진이 섞이지 않았는지 직접 확인해 주세요.
+                        다른 아이 사진이 섞였다면 사진 오른쪽 위의 X를 눌러 이 공유 목록에서만
+                        제외하세요.
                       </p>
                       <div className="result-photo-grid">
                         {items.map((item) => (
-                          <img src={item.url} alt={`${child.name} 분류 사진`} key={item.id} />
+                          <div className="result-photo-item" key={item.id}>
+                            <img src={item.url} alt={`${child.name} 분류 사진`} />
+                            <button
+                              type="button"
+                              className="result-remove-button"
+                              onClick={() => handleExcludeChildPhoto(child, item)}
+                              aria-label={`${item.file.name}을 ${child.name} 목록에서 제외`}
+                            >
+                              ×
+                            </button>
+                          </div>
                         ))}
                       </div>
                     </article>
