@@ -18,8 +18,14 @@ export type FaceMatch = {
   secondBestSimilarity: number
 }
 
+export type FaceProfileConflict = {
+  childId: string
+  similarity: number
+}
+
 const MATCH_THRESHOLD = 0.62
 const MINIMUM_MARGIN = 0.05
+const CONFLICT_THRESHOLD = 0.62
 const DUPLICATE_THRESHOLD = 0.999
 const MAX_PROFILE_EMBEDDINGS = 40
 
@@ -58,6 +64,30 @@ export function addLearnedFaceEmbedding(
       updatedAt: new Date().toISOString(),
     } satisfies FaceProfileRecord,
   }
+}
+
+export function findSimilarOtherChild(
+  embedding: number[],
+  profiles: FaceProfileRecord[],
+  targetChildId: string,
+): FaceProfileConflict | undefined {
+  const strongestConflict = profiles
+    .filter(
+      (profile) => profile.childId !== targetChildId && profile.embeddings.length > 0,
+    )
+    .map((profile) => ({
+      childId: profile.childId,
+      similarity: Math.max(
+        ...profile.embeddings.map((reference) =>
+          compareFaceEmbeddings(embedding, reference),
+        ),
+      ),
+    }))
+    .sort((left, right) => right.similarity - left.similarity)[0]
+
+  return strongestConflict && strongestConflict.similarity >= CONFLICT_THRESHOLD
+    ? strongestConflict
+    : undefined
 }
 
 export function matchFaceEmbedding(
