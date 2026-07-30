@@ -676,10 +676,35 @@ body {
   line-height: 1.5;
 }
 
+.child-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.result-restore-button {
+  min-height: 44px;
+  border: 1px solid #d9b997;
+  border-radius: 999px;
+  padding: 11px 16px;
+  background: #fff9f1;
+  color: #79543d;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .result-photo-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
+}
+
+.result-photo-item {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
 }
 
 .result-photo-grid img {
@@ -691,6 +716,26 @@ body {
   background: #fef5ea;
 }
 
+.result-remove-button {
+  position: absolute;
+  z-index: 2;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(190, 69, 57, 0.96);
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(69, 27, 20, 0.3);
+}
+
 @media (max-width: 768px) {
   .profile-toolbar,
   .child-result-header {
@@ -699,8 +744,14 @@ body {
   }
 
   .profile-all-button,
-  .result-share-button {
+  .result-share-button,
+  .result-restore-button {
     width: 100%;
+  }
+
+  .child-result-actions {
+    width: 100%;
+    flex-direction: column;
   }
 
   .results-heading,
