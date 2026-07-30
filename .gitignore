@@ -1,0 +1,22 @@
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Credentials and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+credentials*.json
+service-account*.json
+secrets*.json
+
+# Giving Tree exports may contain names and photos
+*.givingtree
