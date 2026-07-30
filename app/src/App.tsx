@@ -891,6 +891,11 @@ function App() {
   }
 
   const handleUndoLastLearning = async (child: ChildRecord) => {
+    if (isAnalyzing || isPreparingProfiles || learningFaceKey) {
+      setStatusMessage('진행 중인 분석이나 학습이 끝난 뒤 마지막 학습을 취소해 주세요.')
+      return
+    }
+
     const currentProfile = faceProfiles[child.id]
     const learnedEmbeddings = currentProfile?.learnedEmbeddings ?? []
 
@@ -1250,7 +1255,9 @@ function App() {
                             type="button"
                             className="learning-undo-button"
                             onClick={() => void handleUndoLastLearning(child)}
-                            disabled={isPreparingProfiles || Boolean(learningFaceKey)}
+                            disabled={
+                              isAnalyzing || isPreparingProfiles || Boolean(learningFaceKey)
+                            }
                           >
                             마지막 학습 취소
                           </button>
