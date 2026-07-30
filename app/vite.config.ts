@@ -2,9 +2,30 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+function resolveBasePath() {
+  const configuredBasePath = process.env.VITE_BASE_PATH
+
+  if (configuredBasePath) {
+    const pathWithLeadingSlash = configuredBasePath.startsWith('/')
+      ? configuredBasePath
+      : `/${configuredBasePath}`
+
+    return pathWithLeadingSlash.endsWith('/')
+      ? pathWithLeadingSlash
+      : `${pathWithLeadingSlash}/`
+  }
+
+  if (!process.env.GITHUB_ACTIONS) {
+    return '/'
+  }
+
+  const repositoryName = process.env.GITHUB_REPOSITORY?.split('/').pop()
+  return repositoryName ? `/${repositoryName}/` : '/kids-photo-sorter/'
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  base: process.env.GITHUB_ACTIONS ? '/kids-photo-sorter/' : '/',
+  base: resolveBasePath(),
   plugins: [
     react(),
     VitePWA({
