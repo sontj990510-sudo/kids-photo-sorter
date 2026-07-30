@@ -67,12 +67,13 @@ type ChildRecord = {
   id: string
   name: string
   photoFiles: File[]
+  additionalPhotoFiles?: File[]
   photoSlotOrder?: RepresentativePhotoSlot[]
   createdAt: string
   updatedAt: string
 }
 
-type TabKey = 'register' | 'classify'
+type TabKey = 'home' | 'register' | 'classify'
 type RepresentativePhotoSlot =
   | 'front-1'
   | 'front-2'
@@ -143,6 +144,7 @@ const FACE_PROFILES_STORE_NAME = 'faceProfiles'
 const SETTINGS_STORE_NAME = 'settings'
 const SETTINGS_ID = 'app-settings'
 const REQUIRED_REPRESENTATIVE_PHOTOS = REPRESENTATIVE_PHOTO_SLOTS.length
+const MAX_ADDITIONAL_PHOTOS = 20
 const MIN_CLASS_SIZE = 1
 const MAX_CLASS_SIZE = 40
 
@@ -214,12 +216,15 @@ async function openChildrenDB() {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>('register')
+  const [activeTab, setActiveTab] = useState<TabKey>('home')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [previewItems, setPreviewItems] = useState<PreviewItem[]>([])
   const [statusMessage, setStatusMessage] = useState('')
   const [childName, setChildName] = useState('')
   const [draftPreviewItems, setDraftPreviewItems] = useState<PreviewItem[]>([])
+  const [additionalDraftPreviewItems, setAdditionalDraftPreviewItems] = useState<
+    PreviewItem[]
+  >([])
   const [draftPhotoAssessments, setDraftPhotoAssessments] = useState<
     Partial<Record<RepresentativePhotoSlot, DraftPhotoAssessment>>
   >({})
@@ -266,6 +271,7 @@ function App() {
 
   const classifyInputRef = useRef<HTMLInputElement | null>(null)
   const registerInputRef = useRef<HTMLInputElement | null>(null)
+  const additionalInputRef = useRef<HTMLInputElement | null>(null)
   const restoreInputRef = useRef<HTMLInputElement | null>(null)
   const previewItemsRef = useRef<PreviewItem[]>([])
   const draftPreviewItemsRef = useRef<PreviewItem[]>([])
@@ -361,8 +367,9 @@ function App() {
 
       const nextChildImageUrls: Record<string, string> = {}
       sortedChildren.forEach((child) => {
-        if (child.photoFiles.length > 0) {
-          nextChildImageUrls[child.id] = createObjectUrl(child.photoFiles[0])
+        const coverPhoto = child.photoFiles[0] ?? child.additionalPhotoFiles?.[0]
+        if (coverPhoto) {
+          nextChildImageUrls[child.id] = createObjectUrl(coverPhoto)
         }
       })
 
@@ -463,10 +470,27 @@ function App() {
   const clearDraftPreview = () => {
     setLightboxPhoto(null)
     draftPreviewItems.forEach(({ url }) => revokeObjectUrl(url))
+    additionalDraftPreviewItems.forEach(({ url }) => revokeObjectUrl(url))
+    draftPreviewItemsRef.current = []
+    setDraftPreviewItems([])
+    setAdditionalDraftPreviewItems([])
+    setDraftPhotoAssessments({})
+    activeDraftSlotRef.current = null
+  }
+
+  const clearRepresentativeDraftPreview = () => {
+    setLightboxPhoto(null)
+    draftPreviewItems.forEach(({ url }) => revokeObjectUrl(url))
     draftPreviewItemsRef.current = []
     setDraftPreviewItems([])
     setDraftPhotoAssessments({})
     activeDraftSlotRef.current = null
+  }
+
+  const clearAdditionalDraftPreview = () => {
+    setLightboxPhoto(null)
+    additionalDraftPreviewItems.forEach(({ url }) => revokeObjectUrl(url))
+    setAdditionalDraftPreviewItems([])
   }
 
   const saveAppSettings = async (
@@ -522,7 +546,7 @@ function App() {
       })
       const persistent = await requestPersistentStorage()
       setOnboardingStep(null)
-      setActiveTab('register')
+      setActiveTab('home')
       setStatusMessage(
         persistent
           ? `${nextClassSize}명 반으로 시작할게요. 이 아이폰의 영구 저장도 준비됐어요.`
@@ -761,7 +785,8 @@ function App() {
     }
 
     const totalPhotoCount = targetChildren.reduce(
-      (total, child) => total + child.photoFiles.length,
+      (total, child) =>
+        total + child.photoFiles.length + (child.additionalPhotoFiles?.length ?? 0),
       0,
     )
     let completedPhotoCount = 0
@@ -789,8 +814,12 @@ function App() {
         const learnedEmbeddings = faceProfiles[child.id]?.learnedEmbeddings ?? []
         const learnedSamples = faceProfiles[child.id]?.learnedSamples
         let skippedPhotoCount = 0
+        const profilePhotoFiles = [
+          ...child.photoFiles,
+          ...(child.additionalPhotoFiles ?? []),
+        ]
 
-        for (const photoFile of child.photoFiles) {
+        for (const photoFile of profilePhotoFiles) {
           setProfileProgress({
             label: `${child.name} 대표사진 분석 중`,
             completed: completedPhotoCount,
@@ -825,7 +854,7 @@ function App() {
             learnedEmbeddings,
             learnedSamples,
             embeddings: [...representativeEmbeddings, ...learnedEmbeddings],
-            sourcePhotoCount: child.photoFiles.length,
+            sourcePhotoCount: profilePhotoFiles.length,
             skippedPhotoCount,
             updatedAt: new Date().toISOString(),
           }
@@ -1058,7 +1087,7 @@ function App() {
         faceProfiles[child.id],
         child.id,
         face.embedding,
-        child.photoFiles.length,
+        child.photoFiles.length + (child.additionalPhotoFiles?.length ?? 0),
         previewItems.find((item) => item.id === itemId)?.file.name,
       )
       const database = await openChildrenDB()
@@ -1267,7 +1296,10 @@ function App() {
       return
     }
 
-    const duplicateItem = draftPreviewItems.find(
+    const duplicateItem = [
+      ...draftPreviewItems,
+      ...additionalDraftPreviewItems,
+    ].find(
       (item) =>
         item.slot !== slot &&
         item.file.name === file.name &&
@@ -1280,7 +1312,7 @@ function App() {
         (candidate) => candidate.key === duplicateItem.slot,
       )
       setStatusMessage(
-        `이 사진은 이미 ${duplicateSlot?.title ?? '다른 칸'}에 있어요. 각 칸에는 다른 사진을 선택해 주세요.`,
+        `이 사진은 이미 ${duplicateSlot?.title ?? '추가 사진'}에 있어요. 다른 사진을 선택해 주세요.`,
       )
       return
     }
@@ -1390,6 +1422,78 @@ function App() {
     setStatusMessage('선택한 대표사진을 삭제했어요.')
   }
 
+  const handleSelectAdditionalPhotos = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ''
+
+    if (files.length === 0) {
+      return
+    }
+
+    const availableSlots =
+      MAX_ADDITIONAL_PHOTOS - additionalDraftPreviewItems.length
+    if (availableSlots <= 0) {
+      setStatusMessage(`추가 사진은 최대 ${MAX_ADDITIONAL_PHOTOS}장까지 저장할 수 있어요.`)
+      return
+    }
+
+    const allCurrentItems = [
+      ...draftPreviewItems,
+      ...additionalDraftPreviewItems,
+    ]
+    const uniqueFiles = files.filter(
+      (file, fileIndex) =>
+        !allCurrentItems.some(
+          (item) =>
+            item.file.name === file.name &&
+            item.file.size === file.size &&
+            item.file.lastModified === file.lastModified,
+        ) &&
+        files.findIndex(
+          (candidate) =>
+            candidate.name === file.name &&
+            candidate.size === file.size &&
+            candidate.lastModified === file.lastModified,
+        ) === fileIndex,
+    )
+
+    if (uniqueFiles.length === 0) {
+      setStatusMessage('이미 등록 화면에 있는 사진이에요.')
+      return
+    }
+
+    const acceptedFiles = uniqueFiles.slice(0, availableSlots)
+    const nextItems = acceptedFiles.map((file) => ({
+      id: `${file.name}-${file.lastModified}-${file.size}-${createPreviewId()}`,
+      file,
+      url: createObjectUrl(file),
+    }))
+
+    setAdditionalDraftPreviewItems((previousItems) => [
+      ...previousItems,
+      ...nextItems,
+    ])
+    setStatusMessage(
+      acceptedFiles.length < uniqueFiles.length
+        ? `추가 사진은 최대 ${MAX_ADDITIONAL_PHOTOS}장이에요. ${acceptedFiles.length}장만 추가했어요.`
+        : `추가 사진 ${acceptedFiles.length}장을 넣었어요.`,
+    )
+  }
+
+  const handleRemoveAdditionalPhoto = (itemId: string) => {
+    setLightboxPhoto(null)
+    const targetItem = additionalDraftPreviewItems.find(
+      (item) => item.id === itemId,
+    )
+    if (targetItem) {
+      revokeObjectUrl(targetItem.url)
+    }
+    setAdditionalDraftPreviewItems((previousItems) =>
+      previousItems.filter((item) => item.id !== itemId),
+    )
+    setStatusMessage('선택한 추가 사진을 삭제했어요.')
+  }
+
   const handleRegister = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -1406,14 +1510,11 @@ function App() {
     const orderedDraftItems = REPRESENTATIVE_PHOTO_SLOTS.map((slot) =>
       draftPreviewItems.find((item) => item.slot === slot.key),
     )
-    const missingSlots = REPRESENTATIVE_PHOTO_SLOTS.filter(
-      (_, index) => !orderedDraftItems[index],
-    )
-
-    if (missingSlots.length > 0) {
-      setStatusMessage(
-        `대표사진 6장을 모두 채워주세요. 남은 칸: ${missingSlots.map((slot) => slot.title).join(', ')}`,
-      )
+    if (
+      draftPreviewItems.length === 0 &&
+      additionalDraftPreviewItems.length === 0
+    ) {
+      setStatusMessage('대표사진이나 추가 사진을 최소 1장 넣어주세요.')
       return
     }
 
@@ -1459,7 +1560,10 @@ function App() {
         id: editingChildId ?? `child-${createPreviewId()}`,
         name: trimmedName,
         photoFiles: completeDraftItems.map((item) => item.file),
-        photoSlotOrder: REPRESENTATIVE_PHOTO_SLOTS.map((slot) => slot.key),
+        additionalPhotoFiles: additionalDraftPreviewItems.map((item) => item.file),
+        photoSlotOrder: completeDraftItems
+          .map((item) => item.slot)
+          .filter((slot): slot is RepresentativePhotoSlot => Boolean(slot)),
         createdAt: editingChildId
           ? children.find((child) => child.id === editingChildId)?.createdAt ?? now
           : now,
@@ -1476,7 +1580,8 @@ function App() {
           learnedEmbeddings,
           learnedSamples,
           embeddings: learnedEmbeddings,
-          sourcePhotoCount: payload.photoFiles.length,
+          sourcePhotoCount:
+            payload.photoFiles.length + (payload.additionalPhotoFiles?.length ?? 0),
           skippedPhotoCount: 0,
           updatedAt: now,
         } satisfies FaceProfileRecord)
@@ -1533,14 +1638,23 @@ function App() {
         ): item is PreviewItem & { slot: RepresentativePhotoSlot } =>
           Boolean(item.slot),
       )
+    const legacyAdditionalFiles =
+      child.additionalPhotoFiles ??
+      child.photoFiles.slice(REQUIRED_REPRESENTATIVE_PHOTOS)
+    const nextAdditionalItems = legacyAdditionalFiles
+      .slice(0, MAX_ADDITIONAL_PHOTOS)
+      .map((file) => ({
+        id: `${file.name}-${file.lastModified}-${file.size}-${createPreviewId()}`,
+        file,
+        url: createObjectUrl(file),
+      }))
     setDraftPreviewItems(nextDraftItems)
+    setAdditionalDraftPreviewItems(nextAdditionalItems)
     draftPreviewItemsRef.current = nextDraftItems
     setDraftPhotoAssessments({})
     setActiveTab('register')
     setStatusMessage(
-      child.photoFiles.length < REQUIRED_REPRESENTATIVE_PHOTOS
-        ? `${child.name}의 기존 사진을 불러왔어요. 새 기준에 맞게 빈 사진 칸을 채워주세요.`
-        : `${child.name} 정보를 수정할 수 있어요. 기존 사진은 그대로 유지됩니다.`,
+      `${child.name}의 사진을 불러왔어요. 대표사진은 원하는 칸만 사용해도 됩니다.`,
     )
   }
 
@@ -1615,7 +1729,7 @@ function App() {
 
     const confirmed = window.confirm(
       `${child.name}의 추가 학습 ${learningIndex + 1}번을 삭제할까요?\n\n` +
-        '대표사진 6장으로 준비한 얼굴 정보는 그대로 유지됩니다.',
+        '대표사진과 추가 사진으로 준비한 얼굴 정보는 그대로 유지됩니다.',
     )
 
     if (!confirmed) {
@@ -1785,63 +1899,100 @@ function App() {
           <h1>Giving Tree</h1>
         </header>
 
-        <nav className="tab-list" aria-label="기능 탭">
-          <button
-            type="button"
-            className={`tab-button ${activeTab === 'register' ? 'active' : ''}`}
-            onClick={() => setActiveTab('register')}
-          >
-            <span aria-hidden="true">🌱</span> 아이 등록
-          </button>
-          <button
-            type="button"
-            className={`tab-button ${activeTab === 'classify' ? 'active' : ''}`}
-            onClick={() => setActiveTab('classify')}
-          >
-            <span aria-hidden="true">🍃</span> 사진 분류
-          </button>
-        </nav>
-
-        <section className="utility-bar" aria-label="반 현황과 앱 관리">
-          <div className="class-progress-summary">
-            <div className="class-progress-heading">
-              <span className="class-leaf-badge" aria-hidden="true">🌿</span>
-              <div className="class-progress-copy">
-                <span>우리 반 성장 현황</span>
-                <strong>
-                  {children.length} / {classSize}명
-                </strong>
+        {activeTab === 'home' ? (
+          <>
+            <section className="task-home" aria-labelledby="task-home-title">
+              <div className="task-home-copy">
+                <p>오늘은 무엇을 할까요?</p>
+                <h2 id="task-home-title">원하는 작업을 선택하세요</h2>
               </div>
-            </div>
-            <div className="class-progress-track" aria-hidden="true">
-              <span style={{ width: `${classProgress}%` }} />
-            </div>
+              <div className="task-choice-grid">
+                <button
+                  type="button"
+                  className="task-choice-card register-choice"
+                  onClick={() => setActiveTab('register')}
+                >
+                  <span className="task-choice-icon" aria-hidden="true">🌱</span>
+                  <span className="task-choice-copy">
+                    <small>아이 정보 관리</small>
+                    <strong>아이 등록</strong>
+                    <span>대표사진과 추가 사진으로 AI 얼굴을 준비해요.</span>
+                  </span>
+                  <span className="task-choice-open">시작하기 →</span>
+                </button>
+                <button
+                  type="button"
+                  className="task-choice-card classify-choice"
+                  onClick={() => setActiveTab('classify')}
+                >
+                  <span className="task-choice-icon" aria-hidden="true">🍃</span>
+                  <span className="task-choice-copy">
+                    <small>오늘의 사진 정리</small>
+                    <strong>사진 분류</strong>
+                    <span>여러 사진을 아이별로 나누고 확인한 뒤 공유해요.</span>
+                  </span>
+                  <span className="task-choice-open">시작하기 →</span>
+                </button>
+              </div>
+            </section>
+
+            <section className="utility-bar" aria-label="반 현황과 앱 관리">
+              <div className="class-progress-summary">
+                <div className="class-progress-heading">
+                  <span className="class-leaf-badge" aria-hidden="true">🌿</span>
+                  <div className="class-progress-copy">
+                    <span>우리 반 성장 현황</span>
+                    <strong>
+                      {children.length} / {classSize}명
+                    </strong>
+                  </div>
+                </div>
+                <div className="class-progress-track" aria-hidden="true">
+                  <span style={{ width: `${classProgress}%` }} />
+                </div>
+                <button
+                  type="button"
+                  className="class-size-edit-button"
+                  onClick={openClassSettings}
+                >
+                  반 인원 수정
+                </button>
+              </div>
+              <div className="utility-actions">
+                <button type="button" onClick={openBackupDialog}>
+                  <span aria-hidden="true">↓</span>
+                  <strong>백업</strong>
+                </button>
+                <button type="button" onClick={openOnboardingGuide}>
+                  <span aria-hidden="true">?</span>
+                  <strong>사용 안내</strong>
+                </button>
+              </div>
+            </section>
+          </>
+        ) : (
+          <nav className="detail-navigation" aria-label="상세 화면 이동">
+            <button type="button" onClick={() => setActiveTab('home')}>
+              ← 처음으로
+            </button>
+            <strong>{activeTab === 'register' ? '아이 등록' : '사진 분류'}</strong>
             <button
               type="button"
-              className="class-size-edit-button"
-              onClick={openClassSettings}
+              onClick={() =>
+                setActiveTab(activeTab === 'register' ? 'classify' : 'register')
+              }
             >
-              반 인원 수정
+              {activeTab === 'register' ? '사진 분류로' : '아이 등록으로'}
             </button>
-          </div>
-          <div className="utility-actions">
-            <button type="button" onClick={openBackupDialog}>
-              <span aria-hidden="true">↓</span>
-              <strong>백업</strong>
-            </button>
-            <button type="button" onClick={openOnboardingGuide}>
-              <span aria-hidden="true">?</span>
-              <strong>사용 안내</strong>
-            </button>
-          </div>
-        </section>
+          </nav>
+        )}
 
-        {activeTab === 'register' ? (
+        {activeTab === 'home' ? null : activeTab === 'register' ? (
           <section className="register-section">
             <form className="controls-card register-card" onSubmit={handleRegister}>
               <div className="form-copy">
                 <h2>아이 등록</h2>
-                <p>아이 이름과 대표사진을 등록해 두면 나중에 다시 확인하기 쉬워요.</p>
+                <p>대표사진은 필요한 만큼만 넣고, 더 많은 사진은 추가 사진에 넣어주세요.</p>
               </div>
 
               <label className="field-label" htmlFor="child-name">
@@ -1866,8 +2017,8 @@ function App() {
 
               <div className="representative-photo-heading">
                 <div>
-                  <h3>AI 대표사진 6장</h3>
-                  <p>한 아이만 나오고 얼굴이 선명한 사진을 각 칸에 넣어주세요.</p>
+                  <h3>대표사진</h3>
+                  <p>최대 6장 · 모두 채우지 않아도 돼요.</p>
                 </div>
                 <div className="representative-photo-count" aria-live="polite">
                   <strong>{draftPreviewItems.length}</strong>
@@ -1892,7 +2043,7 @@ function App() {
                             ? '다시 선택'
                             : item
                               ? '기존 사진'
-                              : '필수'
+                              : '선택'
 
                   return (
                     <article
@@ -1987,12 +2138,93 @@ function App() {
                 <button
                   type="button"
                   className="text-reset-button"
-                  onClick={clearDraftPreview}
+                  onClick={clearRepresentativeDraftPreview}
                   disabled={draftPreviewItems.length === 0 || isPreparingProfiles}
                 >
-                  6장 모두 비우기
+                  대표사진 비우기
                 </button>
               </div>
+
+              <section className="additional-photo-section">
+                <div className="additional-photo-heading">
+                  <div>
+                    <h3>추가 사진</h3>
+                    <p>
+                      다양한 표정과 각도의 사진을 더 넣으면 얼굴을 구별하는 데 도움이 돼요.
+                    </p>
+                  </div>
+                  <span>
+                    {additionalDraftPreviewItems.length}/{MAX_ADDITIONAL_PHOTOS}
+                  </span>
+                </div>
+
+                <input
+                  ref={additionalInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleSelectAdditionalPhotos}
+                  hidden
+                />
+
+                <div className="additional-photo-actions">
+                  <button
+                    type="button"
+                    className="additional-photo-add-button"
+                    onClick={() => additionalInputRef.current?.click()}
+                    disabled={
+                      isPreparingProfiles ||
+                      additionalDraftPreviewItems.length >= MAX_ADDITIONAL_PHOTOS
+                    }
+                  >
+                    ＋ 추가 사진 선택
+                  </button>
+                  <button
+                    type="button"
+                    className="additional-photo-clear-button"
+                    onClick={clearAdditionalDraftPreview}
+                    disabled={
+                      isPreparingProfiles || additionalDraftPreviewItems.length === 0
+                    }
+                  >
+                    추가 사진 비우기
+                  </button>
+                </div>
+
+                {additionalDraftPreviewItems.length > 0 ? (
+                  <div className="additional-photo-grid" aria-live="polite">
+                    {additionalDraftPreviewItems.map((item) => (
+                      <div className="additional-photo-item" key={item.id}>
+                        <button
+                          type="button"
+                          className="additional-photo-preview"
+                          onClick={() =>
+                            setLightboxPhoto({
+                              src: item.url,
+                              alt: item.file.name,
+                            })
+                          }
+                          aria-label={`${item.file.name} 크게 보기`}
+                        >
+                          <img src={item.url} alt={item.file.name} />
+                        </button>
+                        <button
+                          type="button"
+                          className="additional-photo-remove"
+                          onClick={() => handleRemoveAdditionalPhoto(item.id)}
+                          aria-label={`${item.file.name} 삭제`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="additional-photo-empty">
+                    선택사항이에요. 사진을 누르면 크게 볼 수 있어요.
+                  </p>
+                )}
+              </section>
 
               <div className="form-actions">
                 <button
@@ -2088,7 +2320,8 @@ function App() {
                         <p>{new Date(child.createdAt).toLocaleDateString('ko-KR')}</p>
                         <p>
                           대표사진 {Math.min(child.photoFiles.length, REQUIRED_REPRESENTATIVE_PHOTOS)}/
-                          {REQUIRED_REPRESENTATIVE_PHOTOS}장
+                          {REQUIRED_REPRESENTATIVE_PHOTOS}장 · 추가{' '}
+                          {child.additionalPhotoFiles?.length ?? 0}장
                         </p>
                         {faceProfiles[child.id] ? (
                           <p className="profile-ready">
@@ -2648,7 +2881,7 @@ function App() {
                       <span>1</span>
                       <div>
                         <strong>아이 등록</strong>
-                        <p>정면·좌우·전신·근접 대표사진 6장으로 등록해요.</p>
+                        <p>대표사진은 필요한 만큼, 추가 사진은 자유롭게 등록해요.</p>
                       </div>
                     </div>
                     <div className="guide-quest">
@@ -3100,7 +3333,7 @@ function App() {
               </button>
             </header>
             <p className="learning-history-description">
-              잘못 지정한 기록만 골라 삭제할 수 있어요. 대표사진 6장은 삭제되지 않습니다.
+              잘못 지정한 기록만 골라 삭제할 수 있어요. 등록 사진은 삭제되지 않습니다.
             </p>
             <div className="learning-history-summary">
               <span>대표사진 얼굴</span>

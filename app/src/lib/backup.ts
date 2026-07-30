@@ -12,6 +12,7 @@ export type BackupChildRecord = {
   id: string
   name: string
   photoFiles: File[]
+  additionalPhotoFiles?: File[]
   photoSlotOrder?: Array<
     'front-1' | 'front-2' | 'left' | 'right' | 'full-body' | 'close-up'
   >
@@ -35,8 +36,12 @@ type SerializedPhoto = {
   data: string
 }
 
-type SerializedChild = Omit<BackupChildRecord, 'photoFiles'> & {
+type SerializedChild = Omit<
+  BackupChildRecord,
+  'photoFiles' | 'additionalPhotoFiles'
+> & {
   photoFiles: SerializedPhoto[]
+  additionalPhotoFiles?: SerializedPhoto[]
 }
 
 type SerializedBackupPayload = Omit<GivingTreeBackupPayload, 'children'> & {
@@ -118,15 +123,21 @@ async function serializeBackup(payload: GivingTreeBackupPayload) {
 
   for (const child of payload.children) {
     const photoFiles: SerializedPhoto[] = []
+    const additionalPhotoFiles: SerializedPhoto[] = []
 
     for (const file of child.photoFiles) {
       photoFiles.push(await serializePhoto(file))
+    }
+
+    for (const file of child.additionalPhotoFiles ?? []) {
+      additionalPhotoFiles.push(await serializePhoto(file))
     }
 
     children.push({
       id: child.id,
       name: child.name,
       photoFiles,
+      additionalPhotoFiles,
       photoSlotOrder: child.photoSlotOrder,
       createdAt: child.createdAt,
       updatedAt: child.updatedAt,
@@ -192,6 +203,15 @@ function parseSerializedBackup(serialized: string): GivingTreeBackupPayload {
             lastModified: photo.lastModified,
           }),
       ),
+      additionalPhotoFiles: Array.isArray(child.additionalPhotoFiles)
+        ? child.additionalPhotoFiles.map(
+            (photo) =>
+              new File([base64ToBytes(photo.data)], photo.name, {
+                type: photo.type,
+                lastModified: photo.lastModified,
+              }),
+          )
+        : [],
     }
   })
 
