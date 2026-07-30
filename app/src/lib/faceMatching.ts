@@ -3,6 +3,8 @@ import { compareFaceEmbeddings } from './faceDetection'
 export type FaceProfileRecord = {
   childId: string
   embeddings: number[][]
+  representativeEmbeddings?: number[][]
+  learnedEmbeddings?: number[][]
   sourcePhotoCount: number
   skippedPhotoCount: number
   updatedAt: string
@@ -18,6 +20,45 @@ export type FaceMatch = {
 
 const MATCH_THRESHOLD = 0.62
 const MINIMUM_MARGIN = 0.05
+const DUPLICATE_THRESHOLD = 0.999
+const MAX_PROFILE_EMBEDDINGS = 40
+
+export function addLearnedFaceEmbedding(
+  existingProfile: FaceProfileRecord | undefined,
+  childId: string,
+  embedding: number[],
+  sourcePhotoCount: number,
+) {
+  const representativeEmbeddings =
+    existingProfile?.representativeEmbeddings ?? existingProfile?.embeddings ?? []
+  const learnedEmbeddings = existingProfile?.learnedEmbeddings ?? []
+  const allExistingEmbeddings = [...representativeEmbeddings, ...learnedEmbeddings]
+  const isDuplicate = allExistingEmbeddings.some(
+    (reference) => compareFaceEmbeddings(embedding, reference) >= DUPLICATE_THRESHOLD,
+  )
+  const maximumLearnedCount = Math.max(
+    0,
+    MAX_PROFILE_EMBEDDINGS - representativeEmbeddings.length,
+  )
+  const nextLearnedEmbeddings = isDuplicate
+    ? learnedEmbeddings
+    : maximumLearnedCount > 0
+      ? [...learnedEmbeddings, embedding].slice(-maximumLearnedCount)
+      : []
+
+  return {
+    added: !isDuplicate,
+    profile: {
+      childId,
+      representativeEmbeddings,
+      learnedEmbeddings: nextLearnedEmbeddings,
+      embeddings: [...representativeEmbeddings, ...nextLearnedEmbeddings],
+      sourcePhotoCount: existingProfile?.sourcePhotoCount ?? sourcePhotoCount,
+      skippedPhotoCount: existingProfile?.skippedPhotoCount ?? 0,
+      updatedAt: new Date().toISOString(),
+    } satisfies FaceProfileRecord,
+  }
+}
 
 export function matchFaceEmbedding(
   embedding: number[] | undefined,
