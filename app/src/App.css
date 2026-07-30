@@ -256,6 +256,7 @@ body {
 
 .remove-photo-button {
   position: absolute;
+  z-index: 3;
   top: 10px;
   right: 10px;
   width: 36px;
