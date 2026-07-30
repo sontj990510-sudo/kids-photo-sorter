@@ -176,6 +176,8 @@ function App() {
   const [draftClassSize, setDraftClassSize] = useState(20)
   const [lastBackupAt, setLastBackupAt] = useState<string | undefined>()
   const [storagePersistent, setStoragePersistent] = useState<boolean | null>(null)
+  const [classSettingsOpen, setClassSettingsOpen] = useState(false)
+  const [isClassSizeSaving, setIsClassSizeSaving] = useState(false)
   const [backupDialogOpen, setBackupDialogOpen] = useState(false)
   const [backupPassword, setBackupPassword] = useState('')
   const [backupPasswordConfirm, setBackupPasswordConfirm] = useState('')
@@ -334,7 +336,7 @@ function App() {
   }, [settingsLoaded])
 
   useEffect(() => {
-    if (!backupDialogOpen && onboardingStep === null) {
+    if (!backupDialogOpen && !classSettingsOpen && onboardingStep === null) {
       return
     }
 
@@ -346,6 +348,8 @@ function App() {
 
       if (backupDialogOpen) {
         setBackupDialogOpen(false)
+      } else if (classSettingsOpen && !isClassSizeSaving) {
+        setClassSettingsOpen(false)
       } else if (onboardingCompleted) {
         setOnboardingStep(null)
       }
@@ -358,7 +362,13 @@ function App() {
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [backupDialogOpen, onboardingCompleted, onboardingStep])
+  }, [
+    backupDialogOpen,
+    classSettingsOpen,
+    isClassSizeSaving,
+    onboardingCompleted,
+    onboardingStep,
+  ])
 
   const clearDraftPreview = () => {
     setLightboxPhoto(null)
@@ -439,6 +449,43 @@ function App() {
   const openOnboardingGuide = () => {
     setDraftClassSize(classSize)
     setOnboardingStep(0)
+  }
+
+  const openClassSettings = () => {
+    setDraftClassSize(classSize)
+    setClassSettingsOpen(true)
+  }
+
+  const handleSaveClassSize = async () => {
+    if (isClassSizeSaving) {
+      return
+    }
+
+    const minimumClassSize = Math.max(MIN_CLASS_SIZE, children.length)
+    const nextClassSize = Math.min(
+      MAX_CLASS_SIZE,
+      Math.max(minimumClassSize, Math.round(draftClassSize)),
+    )
+
+    setIsClassSizeSaving(true)
+
+    try {
+      await saveAppSettings({
+        onboardingCompleted: true,
+        classSize: nextClassSize,
+        lastBackupAt,
+      })
+      setClassSettingsOpen(false)
+      setStatusMessage(`우리 반 인원을 ${nextClassSize}명으로 수정했어요.`)
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? `반 인원을 저장하지 못했어요. ${error.message}`
+          : '반 인원을 저장하지 못했어요.',
+      )
+    } finally {
+      setIsClassSizeSaving(false)
+    }
   }
 
   const openBackupDialog = () => {
@@ -1457,7 +1504,10 @@ function App() {
             <GivingTreeMark />
           </div>
           <div className="hero-copy">
-            <p className="eyebrow">GIVING TREE · PHOTO GARDEN</p>
+            <div className="hero-label-row">
+              <p className="eyebrow">GIVING TREE · PHOTO GARDEN</p>
+              <span className="local-only-chip">내 기기에서만</span>
+            </div>
             <h1>
               아이들의 하루가 자라는
               <span>Giving Tree</span>
@@ -1488,22 +1538,34 @@ function App() {
 
         <section className="utility-bar" aria-label="반 현황과 앱 관리">
           <div className="class-progress-summary">
-            <div className="class-progress-copy">
-              <span>우리 반 나무</span>
-              <strong>
-                {children.length} / {classSize}명
-              </strong>
+            <div className="class-progress-heading">
+              <span className="class-leaf-badge" aria-hidden="true">🌿</span>
+              <div className="class-progress-copy">
+                <span>우리 반 성장 현황</span>
+                <strong>
+                  {children.length} / {classSize}명
+                </strong>
+              </div>
             </div>
             <div className="class-progress-track" aria-hidden="true">
               <span style={{ width: `${classProgress}%` }} />
             </div>
+            <button
+              type="button"
+              className="class-size-edit-button"
+              onClick={openClassSettings}
+            >
+              반 인원 수정
+            </button>
           </div>
           <div className="utility-actions">
             <button type="button" onClick={openBackupDialog}>
-              <span aria-hidden="true">🔐</span> 백업·복원
+              <span aria-hidden="true">↓</span>
+              <strong>백업</strong>
             </button>
             <button type="button" onClick={openOnboardingGuide}>
-              <span aria-hidden="true">?</span> 사용 안내
+              <span aria-hidden="true">?</span>
+              <strong>사용 안내</strong>
             </button>
           </div>
         </section>
@@ -2376,6 +2438,138 @@ function App() {
                     : onboardingStep === 3
                       ? 'Giving Tree 시작하기'
                       : '다음'}
+              </button>
+            </footer>
+          </article>
+        </div>
+      ) : null}
+
+      {classSettingsOpen ? (
+        <div
+          className="class-settings-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="class-settings-title"
+          onClick={() => {
+            if (!isClassSizeSaving) {
+              setClassSettingsOpen(false)
+            }
+          }}
+        >
+          <article
+            className="class-settings-card"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="class-settings-header">
+              <div>
+                <span className="settings-leaf" aria-hidden="true">🌿</span>
+                <div>
+                  <p>CLASS SETTINGS</p>
+                  <h2 id="class-settings-title">우리 반 인원 수정</h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setClassSettingsOpen(false)}
+                disabled={isClassSizeSaving}
+                aria-label="반 인원 수정 닫기"
+              >
+                ×
+              </button>
+            </header>
+
+            <p className="class-settings-description">
+              실제 반 인원이 바뀌어도 등록된 아이와 얼굴 학습 데이터는 그대로 유지돼요.
+            </p>
+
+            <div className="class-size-picker settings-size-picker">
+              <button
+                type="button"
+                onClick={() =>
+                  setDraftClassSize((current) =>
+                    Math.max(Math.max(MIN_CLASS_SIZE, children.length), current - 1),
+                  )
+                }
+                disabled={
+                  draftClassSize <= Math.max(MIN_CLASS_SIZE, children.length) ||
+                  isClassSizeSaving
+                }
+                aria-label="반 인원 한 명 줄이기"
+              >
+                −
+              </button>
+              <label>
+                <input
+                  type="number"
+                  min={Math.max(MIN_CLASS_SIZE, children.length)}
+                  max={MAX_CLASS_SIZE}
+                  value={draftClassSize}
+                  onChange={(event) =>
+                    setDraftClassSize(
+                      Math.min(
+                        MAX_CLASS_SIZE,
+                        Math.max(
+                          Math.max(MIN_CLASS_SIZE, children.length),
+                          Number(event.target.value) || Math.max(1, children.length),
+                        ),
+                      ),
+                    )
+                  }
+                  disabled={isClassSizeSaving}
+                  aria-label="수정할 반 인원"
+                />
+                <span>명</span>
+              </label>
+              <button
+                type="button"
+                onClick={() =>
+                  setDraftClassSize((current) =>
+                    Math.min(MAX_CLASS_SIZE, current + 1),
+                  )
+                }
+                disabled={draftClassSize >= MAX_CLASS_SIZE || isClassSizeSaving}
+                aria-label="반 인원 한 명 늘리기"
+              >
+                +
+              </button>
+            </div>
+
+            <div className="class-size-presets settings-presets">
+              {[15, 20, 25, 30].map((size) => (
+                <button
+                  type="button"
+                  className={draftClassSize === size ? 'active' : ''}
+                  onClick={() => setDraftClassSize(size)}
+                  disabled={size < children.length || isClassSizeSaving}
+                  key={size}
+                >
+                  {size}명
+                </button>
+              ))}
+            </div>
+
+            <div className="registered-class-note">
+              <span>현재 등록</span>
+              <strong>{children.length}명</strong>
+              <p>등록된 아이 수보다 작게 설정할 수 없어요.</p>
+            </div>
+
+            <footer className="class-settings-actions">
+              <button
+                type="button"
+                className="class-settings-cancel"
+                onClick={() => setClassSettingsOpen(false)}
+                disabled={isClassSizeSaving}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="class-settings-save"
+                onClick={() => void handleSaveClassSize()}
+                disabled={isClassSizeSaving}
+              >
+                {isClassSizeSaving ? '저장 중…' : '변경 저장'}
               </button>
             </footer>
           </article>
