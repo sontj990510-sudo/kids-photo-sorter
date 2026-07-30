@@ -3,7 +3,11 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { openDB } from 'idb'
 import { analyzeFacesInFile } from './lib/faceDetection'
 import type { DetectedFaceBox } from './lib/faceDetection'
-import { addLearnedFaceEmbedding, matchFaceEmbedding } from './lib/faceMatching'
+import {
+  addLearnedFaceEmbedding,
+  findSimilarOtherChild,
+  matchFaceEmbedding,
+} from './lib/faceMatching'
 import type { FaceMatch, FaceProfileRecord } from './lib/faceMatching'
 import './App.css'
 
@@ -24,6 +28,23 @@ type FaceAnalysis = {
   error?: string
 }
 
+type PendingLearning = {
+  faceKey: string
+  itemId: string
+  faceIndex: number
+  childId: string
+}
+
+type LearningConflict = PendingLearning & {
+  otherChildId: string
+  similarity: number
+}
+
+type ShareReceipt = {
+  count: number
+  completedAt: string
+}
+
 type ChildRecord = {
   id: string
   name: string
@@ -39,6 +60,13 @@ const DB_VERSION = 2
 const CHILDREN_STORE_NAME = 'children'
 const FACE_PROFILES_STORE_NAME = 'faceProfiles'
 const MAX_PHOTOS = 10
+
+function formatReceiptTime(completedAt: string) {
+  return new Date(completedAt).toLocaleTimeString('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
 async function openChildrenDB() {
   return openDB(DB_NAME, DB_VERSION, {
@@ -76,7 +104,10 @@ function App() {
   const [faceAnalyses, setFaceAnalyses] = useState<Record<string, FaceAnalysis>>({})
   const [learningSelections, setLearningSelections] = useState<Record<string, string>>({})
   const [learningFaceKey, setLearningFaceKey] = useState<string | null>(null)
+  const [pendingLearning, setPendingLearning] = useState<PendingLearning | null>(null)
+  const [learningConflict, setLearningConflict] = useState<LearningConflict | null>(null)
   const [excludedChildPhotos, setExcludedChildPhotos] = useState<Record<string, true>>({})
+  const [shareReceipts, setShareReceipts] = useState<Record<string, ShareReceipt>>({})
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisProgress, setAnalysisProgress] = useState({ completed: 0, total: 0 })
 
@@ -90,6 +121,21 @@ function App() {
   useEffect(() => {
     previewItemsRef.current = previewItems
   }, [previewItems])
+
+  useEffect(() => {
+    if (!pendingLearning || learningConflict) {
+      return
+    }
+
+    const timerId = window.setTimeout(() => {
+      setPendingLearning(null)
+      setStatusMessage('추가 학습 확인 시간이 지나 취소됐어요. 필요하면 다시 눌러주세요.')
+    }, 8000)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [learningConflict, pendingLearning])
 
   useEffect(() => {
     return () => {
@@ -179,6 +225,9 @@ function App() {
     setIsPreparingProfiles(true)
     setFaceAnalyses({})
     setExcludedChildPhotos({})
+    setShareReceipts({})
+    setPendingLearning(null)
+    setLearningConflict(null)
     setAnalysisProgress({ completed: 0, total: 0 })
     setProfileProgress({
       label: '얼굴 인식 모델을 준비하고 있어요.',
@@ -298,6 +347,9 @@ function App() {
     setFaceAnalyses({})
     setLearningSelections({})
     setExcludedChildPhotos({})
+    setShareReceipts({})
+    setPendingLearning(null)
+    setLearningConflict(null)
     setAnalysisProgress({ completed: 0, total: 0 })
     setStatusMessage(`${uniqueFiles.length}장의 사진을 추가했어요.`)
     event.target.value = ''
@@ -311,6 +363,9 @@ function App() {
     setFaceAnalyses({})
     setLearningSelections({})
     setExcludedChildPhotos({})
+    setShareReceipts({})
+    setPendingLearning(null)
+    setLearningConflict(null)
     setAnalysisProgress({ completed: 0, total: 0 })
     setStatusMessage('선택한 사진을 모두 비웠어요.')
   }
@@ -345,6 +400,9 @@ function App() {
         ),
       ),
     )
+    setShareReceipts({})
+    setPendingLearning(null)
+    setLearningConflict(null)
     setStatusMessage('선택한 사진을 삭제했어요.')
   }
 
@@ -362,6 +420,9 @@ function App() {
     setFaceAnalyses({})
     setLearningSelections({})
     setExcludedChildPhotos({})
+    setShareReceipts({})
+    setPendingLearning(null)
+    setLearningConflict(null)
     setAnalysisProgress({ completed: 0, total: itemsToAnalyze.length })
     setStatusMessage(
       profilesToUse.length > 0
@@ -423,7 +484,13 @@ function App() {
     }
   }
 
-  const handleLearnFace = async (itemId: string, faceIndex: number, childId: string) => {
+  const cancelLearningConfirmation = () => {
+    setPendingLearning(null)
+    setLearningConflict(null)
+    setStatusMessage('추가 학습을 취소했어요.')
+  }
+
+  const saveLearnFace = async (itemId: string, faceIndex: number, childId: string) => {
     const child = children.find((candidate) => candidate.id === childId)
     const face = faceAnalyses[itemId]?.faces[faceIndex]
     const faceKey = `${itemId}:${faceIndex}`
@@ -433,15 +500,8 @@ function App() {
       return
     }
 
-    const confirmed = window.confirm(
-      `이 얼굴을 ${child.name}(으)로 지정하고 추가 학습할까요?\n\n` +
-        '잘못 지정하면 이후 분류 정확도가 낮아질 수 있으므로 얼굴을 꼭 확인해 주세요.',
-    )
-
-    if (!confirmed) {
-      return
-    }
-
+    setPendingLearning(null)
+    setLearningConflict(null)
     setLearningFaceKey(faceKey)
 
     try {
@@ -493,6 +553,7 @@ function App() {
         delete nextExclusions[`${child.id}::${itemId}`]
         return nextExclusions
       })
+      setShareReceipts({})
       setStatusMessage(
         added
           ? `${child.name} 얼굴을 추가 학습했어요. 현재 사진들도 새 정보로 다시 분류했어요.`
@@ -509,11 +570,67 @@ function App() {
     }
   }
 
+  const handleLearnFace = (itemId: string, faceIndex: number, childId: string) => {
+    const child = children.find((candidate) => candidate.id === childId)
+    const face = faceAnalyses[itemId]?.faces[faceIndex]
+    const faceKey = `${itemId}:${faceIndex}`
+
+    if (!child || !face?.embedding || learningFaceKey) {
+      setStatusMessage('학습할 얼굴과 아이를 다시 선택해 주세요.')
+      return
+    }
+
+    const isSecondConfirmation =
+      pendingLearning?.faceKey === faceKey && pendingLearning.childId === childId
+
+    if (!isSecondConfirmation) {
+      setPendingLearning({ faceKey, itemId, faceIndex, childId })
+      setLearningConflict(null)
+      setStatusMessage(
+        `${child.name} 얼굴로 학습하려면 8초 안에 ‘한 번 더 눌러 학습 확정’을 눌러주세요.`,
+      )
+      return
+    }
+
+    const conflict = findSimilarOtherChild(
+      face.embedding,
+      Object.values(faceProfiles),
+      child.id,
+    )
+
+    if (conflict) {
+      setLearningConflict({
+        faceKey,
+        itemId,
+        faceIndex,
+        childId,
+        otherChildId: conflict.childId,
+        similarity: conflict.similarity,
+      })
+      setStatusMessage(
+        `${childNamesById[conflict.childId] ?? '다른 아이'} 얼굴과 유사합니다. 경고 내용을 확인해 주세요.`,
+      )
+      return
+    }
+
+    void saveLearnFace(itemId, faceIndex, childId)
+  }
+
+  const handleConfirmLearningConflict = () => {
+    if (!learningConflict) {
+      return
+    }
+
+    const { itemId, faceIndex, childId } = learningConflict
+    void saveLearnFace(itemId, faceIndex, childId)
+  }
+
   const shareFiles = async (
     files: File[],
     title: string,
     text: string,
     successMessage: string,
+    receiptKey: string,
   ) => {
     if (files.length === 0) {
       return
@@ -538,6 +655,13 @@ function App() {
     try {
       if (navigator.canShare?.(sharePayload)) {
         await navigator.share(sharePayload)
+        setShareReceipts((previousReceipts) => ({
+          ...previousReceipts,
+          [receiptKey]: {
+            count: files.length,
+            completedAt: new Date().toISOString(),
+          },
+        }))
         setStatusMessage(successMessage)
       } else {
         setStatusMessage('이 기기에서는 사진 파일 공유가 지원되지 않아요. 사진을 직접 저장한 뒤 보내주세요.')
@@ -555,6 +679,7 @@ function App() {
       '아이들 사진 정리 테스트',
       '사진을 함께 확인해 보세요.',
       '사진을 공유했어요.',
+      'all',
     )
   }
 
@@ -573,6 +698,7 @@ function App() {
       `${child.name} 사진`,
       `${child.name} 사진을 확인해 주세요.`,
       `${child.name} 사진을 공유했어요.`,
+      child.id,
     )
   }
 
@@ -679,6 +805,9 @@ function App() {
       }
       setFaceAnalyses({})
       setExcludedChildPhotos({})
+      setShareReceipts({})
+      setPendingLearning(null)
+      setLearningConflict(null)
       await loadChildren()
       setChildName('')
       clearDraftPreview()
@@ -750,6 +879,9 @@ function App() {
       })
       setFaceAnalyses({})
       setExcludedChildPhotos({})
+      setShareReceipts({})
+      setPendingLearning(null)
+      setLearningConflict(null)
       setStatusMessage('아이 정보를 삭제했어요.')
     } catch (error) {
       if (error instanceof Error) {
@@ -758,11 +890,89 @@ function App() {
     }
   }
 
+  const handleUndoLastLearning = async (child: ChildRecord) => {
+    const currentProfile = faceProfiles[child.id]
+    const learnedEmbeddings = currentProfile?.learnedEmbeddings ?? []
+
+    if (!currentProfile || learnedEmbeddings.length === 0) {
+      setStatusMessage(`${child.name}에게 취소할 추가 학습이 없어요.`)
+      return
+    }
+
+    const confirmed = window.confirm(
+      `${child.name}의 가장 최근 추가 학습 1개를 삭제할까요?\n\n` +
+        '대표사진으로 준비한 얼굴 정보는 유지됩니다.',
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      const representativeEmbeddings =
+        currentProfile.representativeEmbeddings ?? currentProfile.embeddings
+      const nextLearnedEmbeddings = learnedEmbeddings.slice(0, -1)
+      const nextEmbeddings = [...representativeEmbeddings, ...nextLearnedEmbeddings]
+      const database = await openChildrenDB()
+      const nextProfiles = { ...faceProfiles }
+
+      if (nextEmbeddings.length > 0) {
+        const nextProfile: FaceProfileRecord = {
+          ...currentProfile,
+          representativeEmbeddings,
+          learnedEmbeddings: nextLearnedEmbeddings,
+          embeddings: nextEmbeddings,
+          updatedAt: new Date().toISOString(),
+        }
+        await database.put(FACE_PROFILES_STORE_NAME, nextProfile)
+        nextProfiles[child.id] = nextProfile
+      } else {
+        await database.delete(FACE_PROFILES_STORE_NAME, child.id)
+        delete nextProfiles[child.id]
+      }
+
+      const profilesToUse = Object.values(nextProfiles)
+      setFaceProfiles(nextProfiles)
+      setFaceAnalyses((previousAnalyses) =>
+        Object.fromEntries(
+          Object.entries(previousAnalyses).map(([itemId, analysis]) => [
+            itemId,
+            {
+              ...analysis,
+              faces: analysis.faces.map((face) => ({
+                ...face,
+                match: matchFaceEmbedding(face.embedding, profilesToUse),
+              })),
+            },
+          ]),
+        ),
+      )
+      setExcludedChildPhotos({})
+      setShareReceipts({})
+      setPendingLearning(null)
+      setLearningConflict(null)
+      setStatusMessage(
+        `${child.name}의 마지막 추가 학습을 취소하고 현재 사진을 다시 분류했어요.`,
+      )
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? `마지막 학습을 취소하지 못했어요. ${error.message}`
+          : '마지막 학습을 취소하지 못했어요.',
+      )
+    }
+  }
+
   const handleExcludeChildPhoto = (child: ChildRecord, item: PreviewItem) => {
     setExcludedChildPhotos((previousExclusions) => ({
       ...previousExclusions,
       [`${child.id}::${item.id}`]: true,
     }))
+    setShareReceipts((previousReceipts) => {
+      const nextReceipts = { ...previousReceipts }
+      delete nextReceipts[child.id]
+      return nextReceipts
+    })
     setStatusMessage(
       `${item.file.name} 사진을 ${child.name} 공유 목록에서 제외했어요. 원본 사진은 삭제되지 않았어요.`,
     )
@@ -776,6 +986,11 @@ function App() {
         ),
       ),
     )
+    setShareReceipts((previousReceipts) => {
+      const nextReceipts = { ...previousReceipts }
+      delete nextReceipts[child.id]
+      return nextReceipts
+    })
     setStatusMessage(`${child.name} 목록에서 제외했던 사진을 다시 포함했어요.`)
   }
 
@@ -798,11 +1013,15 @@ function App() {
     })
     .filter((group) => group.items.length > 0 || group.excludedCount > 0)
   const reviewItems = previewItems.filter((item) => {
-    const faces = faceAnalyses[item.id]?.faces ?? []
-    const hasMatchedChild = faces.some((face) => face.match.status === 'matched')
-    const hasUnidentifiedFace = faces.some((face) => face.match.status === 'review')
-    return hasUnidentifiedFace && !hasMatchedChild
+    const analysis = faceAnalyses[item.id]
+    return Boolean(
+      analysis && !analysis.faces.some((face) => face.match.status === 'matched'),
+    )
   })
+  const confirmedPhotoCount = previewItems.filter((item) =>
+    faceAnalyses[item.id]?.faces.some((face) => face.match.status === 'matched'),
+  ).length
+  const unconfirmedPhotoCount = previewItems.length - confirmedPhotoCount
   const analyzedItemCount = Object.keys(faceAnalyses).length
 
   return (
@@ -1026,6 +1245,16 @@ function App() {
                         >
                           수정
                         </button>
+                        {(faceProfiles[child.id]?.learnedEmbeddings?.length ?? 0) > 0 ? (
+                          <button
+                            type="button"
+                            className="learning-undo-button"
+                            onClick={() => void handleUndoLastLearning(child)}
+                            disabled={isPreparingProfiles || Boolean(learningFaceKey)}
+                          >
+                            마지막 학습 취소
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="danger-button"
@@ -1096,12 +1325,29 @@ function App() {
                 hidden
               />
 
+              <div className="photo-stats" aria-label="사진 분류 현황">
+                <div className="photo-stat">
+                  <strong>{selectedFiles.length}</strong>
+                  <span>업로드된 총 사진</span>
+                </div>
+                <div className={`photo-stat ${unconfirmedPhotoCount > 0 ? 'warning' : 'complete'}`}>
+                  <strong>{unconfirmedPhotoCount}</strong>
+                  <span>총 {selectedFiles.length}장 중 확인 안 된 사진</span>
+                </div>
+              </div>
+
               <div className="selection-summary">
-                <p>{selectedFiles.length}장 선택됨</p>
                 <p className="hint">
                   AI 준비 완료 {preparedChildCount}명 · 공유 전에는 분류 결과를 직접 확인해 주세요.
                 </p>
               </div>
+
+              {shareReceipts.all ? (
+                <p className="share-receipt" role="status">
+                  ✓ 전송 완료 · {shareReceipts.all.count}장 ·{' '}
+                  {formatReceiptTime(shareReceipts.all.completedAt)}
+                </p>
+              ) : null}
 
               {isAnalyzing ? (
                 <div className="analysis-progress" role="status" aria-live="polite">
@@ -1199,6 +1445,19 @@ function App() {
                               const currentName = face.match.childId
                                 ? childNamesById[face.match.childId]
                                 : '확인 필요'
+                              const isPendingLearning =
+                                pendingLearning?.faceKey === faceKey &&
+                                pendingLearning.childId === selectedChildId
+                              const conflictForFace =
+                                learningConflict?.faceKey === faceKey
+                                  ? learningConflict
+                                  : undefined
+                              const selectedChildName = selectedChildId
+                                ? childNamesById[selectedChildId]
+                                : undefined
+                              const conflictChildName = conflictForFace
+                                ? childNamesById[conflictForFace.otherChildId] ?? '다른 아이'
+                                : undefined
 
                               return (
                                 <div className="face-learning-row" key={`${faceKey}:learning`}>
@@ -1208,12 +1467,14 @@ function App() {
                                   <select
                                     id={`learn-${faceKey}`}
                                     value={selectedChildId}
-                                    onChange={(event) =>
+                                    onChange={(event) => {
                                       setLearningSelections((previousSelections) => ({
                                         ...previousSelections,
                                         [faceKey]: event.target.value,
                                       }))
-                                    }
+                                      setPendingLearning(null)
+                                      setLearningConflict(null)
+                                    }}
                                     disabled={Boolean(learningFaceKey)}
                                   >
                                     <option value="">아이 선택</option>
@@ -1225,13 +1486,55 @@ function App() {
                                   </select>
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      void handleLearnFace(id, faceIndex, selectedChildId)
+                                    className={isPendingLearning ? 'learning-confirm-button' : ''}
+                                    onClick={() => handleLearnFace(id, faceIndex, selectedChildId)}
+                                    disabled={
+                                      !selectedChildId ||
+                                      Boolean(learningFaceKey) ||
+                                      Boolean(conflictForFace)
                                     }
-                                    disabled={!selectedChildId || Boolean(learningFaceKey)}
                                   >
-                                    {learningFaceKey === faceKey ? '학습 중…' : '지정·추가 학습'}
+                                    {learningFaceKey === faceKey
+                                      ? '학습 중…'
+                                      : isPendingLearning
+                                        ? '한 번 더 눌러 학습 확정'
+                                        : '지정·추가 학습'}
                                   </button>
+                                  {isPendingLearning && !conflictForFace ? (
+                                    <button
+                                      type="button"
+                                      className="learning-cancel-button"
+                                      onClick={cancelLearningConfirmation}
+                                    >
+                                      취소
+                                    </button>
+                                  ) : null}
+                                  {conflictForFace ? (
+                                    <div className="learning-conflict-warning" role="alert">
+                                      <p>
+                                        <strong>{conflictChildName}</strong> 아이와 얼굴이{' '}
+                                        {Math.round(conflictForFace.similarity * 100)}% 유사합니다.{' '}
+                                        <strong>{selectedChildName}</strong> 아이로 추가 학습하는
+                                        것이 맞는지 다시 확인해 주세요.
+                                      </p>
+                                      <div className="learning-conflict-actions">
+                                        <button
+                                          type="button"
+                                          className="conflict-confirm-button"
+                                          onClick={handleConfirmLearningConflict}
+                                        >
+                                          그래도 {selectedChildName}로 학습
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="learning-cancel-button"
+                                          onClick={cancelLearningConfirmation}
+                                        >
+                                          학습 취소
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : null}
                                 </div>
                               )
                             })}
@@ -1257,7 +1560,10 @@ function App() {
               <section className="classification-results" aria-live="polite">
                 <div className="results-heading">
                   <h2>아이별 분류 결과</h2>
-                  <p>단체사진은 얼굴이 확인된 모든 아이의 목록에 함께 들어갑니다.</p>
+                  <p>
+                    총 {previewItems.length}장 중 {unconfirmedPhotoCount}장이 확인되지 않았어요.
+                    단체사진은 얼굴이 확인된 모든 아이의 목록에 함께 들어갑니다.
+                  </p>
                 </div>
 
                 {groupedChildResults.length > 0 ? (
@@ -1295,6 +1601,12 @@ function App() {
                         다른 아이 사진이 섞였다면 사진 오른쪽 위의 X를 눌러 이 공유 목록에서만
                         제외하세요.
                       </p>
+                      {shareReceipts[child.id] ? (
+                        <p className="share-receipt" role="status">
+                          ✓ 전송 완료 · {shareReceipts[child.id].count}장 ·{' '}
+                          {formatReceiptTime(shareReceipts[child.id].completedAt)}
+                        </p>
+                      ) : null}
                       <div className="result-photo-grid">
                         {items.map((item) => (
                           <div className="result-photo-item" key={item.id}>
@@ -1325,7 +1637,8 @@ function App() {
                       <div>
                         <h3>확인 필요</h3>
                         <p>
-                          등록된 아이를 한 명도 확정하지 못한 사진이 {reviewItems.length}장 있어요.
+                          총 {previewItems.length}장 중 등록된 아이를 한 명도 확정하지 못한
+                          사진이 {reviewItems.length}장 있어요.
                         </p>
                       </div>
                     </div>
