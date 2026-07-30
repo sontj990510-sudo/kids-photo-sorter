@@ -1,0 +1,253 @@
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f9efe6 0%, #f4dfc7 100%);
+  color: #5d4037;
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.photo-sorter-app {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.shell {
+  width: min(100%, 980px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.hero-card,
+.controls-card,
+.preview-card {
+  background: rgba(255, 248, 240, 0.95);
+  border: 1px solid #e8cfb6;
+  border-radius: 24px;
+  box-shadow: 0 16px 40px rgba(121, 84, 49, 0.12);
+}
+
+.hero-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 28px;
+}
+
+.hero-copy h1 {
+  margin: 0 0 10px;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  line-height: 1.2;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #b06c41;
+}
+
+.description {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #7a5b47;
+}
+
+.hero-badge {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  background: linear-gradient(145deg, #ffe5cc, #f4c08e);
+  font-size: 2rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.controls-card {
+  padding: 24px 28px;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.button-row button {
+  border: none;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.button-row button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(121, 84, 49, 0.16);
+}
+
+.button-row button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.primary-button {
+  background: #d9854b;
+  color: #fff7ef;
+}
+
+.secondary-button {
+  background: #f8ebdc;
+  color: #7d5337;
+}
+
+.share-button {
+  background: #8f5a3c;
+  color: #fff7ef;
+}
+
+.selection-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  color: #7d5337;
+}
+
+.selection-summary p {
+  margin: 0;
+}
+
+.hint {
+  font-size: 0.92rem;
+  color: #9b7458;
+}
+
+.status-message {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff5eb;
+  color: #8f5a3c;
+  border: 1px solid #f2d5b8;
+}
+
+.preview-card {
+  padding: 24px 28px;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.preview-tile {
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fffdf9;
+  border: 1px solid #f1ddc6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.preview-tile img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+  background: #fef5ea;
+}
+
+.preview-tile p {
+  margin: 0;
+  padding: 10px 12px 12px;
+  font-size: 0.9rem;
+  color: #6b4a33;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  min-height: 240px;
+  border: 1px dashed #e5cbb0;
+  border-radius: 18px;
+  background: #fffaf4;
+  padding: 24px;
+}
+
+.empty-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.empty-state h2 {
+  margin: 0 0 8px;
+  color: #6d4530;
+}
+
+.empty-state p {
+  margin: 0;
+  color: #8e6d53;
+}
+
+@media (max-width: 768px) {
+  .photo-sorter-app {
+    padding: 12px;
+  }
+
+  .hero-card,
+  .controls-card,
+  .preview-card {
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .hero-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .button-row {
+    flex-direction: column;
+  }
+
+  .button-row button {
+    width: 100%;
+  }
+
+  .selection-summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .preview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .preview-grid {
+    grid-template-columns: 1fr;
+  }
+}
