@@ -573,6 +573,58 @@ body {
   color: #a04739;
 }
 
+.face-learning-list {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 4px;
+}
+
+.face-learning-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding-top: 9px;
+  border-top: 1px solid #f0dfcc;
+}
+
+.face-learning-row label {
+  grid-column: 1 / -1;
+  color: #70513d;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.face-learning-row select,
+.face-learning-row button {
+  min-height: 40px;
+  border-radius: 10px;
+  font: inherit;
+}
+
+.face-learning-row select {
+  min-width: 0;
+  border: 1px solid #ddc5aa;
+  padding: 8px 10px;
+  background: #fffdf9;
+  color: #624431;
+}
+
+.face-learning-row button {
+  border: none;
+  padding: 8px 12px;
+  background: #4f7c64;
+  color: #f4fff8;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.face-learning-row button:disabled,
+.face-learning-row select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .remove-photo-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -664,6 +716,19 @@ body {
 }
 
 @media (max-width: 480px) {
+  .face-learning-row {
+    grid-template-columns: 1fr;
+  }
+
+  .face-learning-row label {
+    grid-column: auto;
+  }
+
+  .face-learning-row select,
+  .face-learning-row button {
+    width: 100%;
+  }
+
   .result-photo-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
