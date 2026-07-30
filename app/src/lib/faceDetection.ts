@@ -1,4 +1,4 @@
-import { Human } from '@vladmandic/human'
+import { Human, match } from '@vladmandic/human'
 import type { Config } from '@vladmandic/human'
 
 export type DetectedFaceBox = {
@@ -9,8 +9,12 @@ export type DetectedFaceBox = {
   score: number
 }
 
+export type DetectedFace = DetectedFaceBox & {
+  embedding?: number[]
+}
+
 export type FaceDetectionResult = {
-  faces: DetectedFaceBox[]
+  faces: DetectedFace[]
   durationMs: number
 }
 
@@ -42,7 +46,11 @@ const humanConfig: Partial<Config> = {
     mesh: { enabled: false },
     attention: { enabled: false },
     iris: { enabled: false },
-    description: { enabled: false },
+    description: {
+      enabled: true,
+      modelPath: 'faceres.json',
+      minConfidence: 0.5,
+    },
     emotion: { enabled: false },
     antispoof: { enabled: false },
     liveness: { enabled: false },
@@ -112,6 +120,7 @@ export async function analyzeFacesInFile(file: File): Promise<FaceDetectionResul
         width: Math.min(clamp(rawWidth), 1 - x),
         height: Math.min(clamp(rawHeight), 1 - y),
         score: face.boxScore,
+        embedding: face.embedding?.slice(),
       }
     })
 
@@ -122,4 +131,12 @@ export async function analyzeFacesInFile(file: File): Promise<FaceDetectionResul
   } finally {
     URL.revokeObjectURL(imageUrl)
   }
+}
+
+export function compareFaceEmbeddings(first: number[], second: number[]) {
+  if (first.length === 0 || first.length !== second.length) {
+    return 0
+  }
+
+  return match.similarity(first, second)
 }
