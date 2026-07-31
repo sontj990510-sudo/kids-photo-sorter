@@ -20,3 +20,8 @@ secrets*.json
 
 # Giving Tree exports may contain names and photos
 *.givingtree
+
+# Local builds and dependencies
+**/node_modules/
+**/dist/
+**/*.tsbuildinfo
