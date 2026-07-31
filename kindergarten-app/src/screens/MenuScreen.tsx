@@ -430,7 +430,8 @@ function Approvals({
       detail: '김하린 · 판다반 신청',
       time: '10분 전',
       relationship: '어머니',
-      phone: '010-••••-4821',
+      phone: '+1 (714) •••-4821 · SMS 확인',
+      legalAuthority: '법적 보호자 응답 · 원장 확인 대기',
       roster: '김하린 · 2019. 09. •• · 판다반',
       existing: '아버지 보호자 1명 연결됨',
       confirmationText: '김하린',
@@ -440,7 +441,8 @@ function Approvals({
       detail: '다람쥐반 교사 신청',
       time: '1시간 전',
       relationship: '교직원',
-      phone: '010-••••-1190',
+      phone: '+1 (657) •••-1190 · SMS 확인',
+      legalAuthority: '해당 없음',
       roster: '채용 명단 확인 · 다람쥐반 예정',
       existing: '기존 연결 없음',
       confirmationText: '최윤서',
@@ -450,7 +452,8 @@ function Approvals({
       detail: 'Leo · 토끼반 신청',
       time: '어제',
       relationship: '아버지',
-      phone: '010-••••-7302',
+      phone: '+1 (562) •••-7302 · SMS 확인',
+      legalAuthority: '법적 보호자 응답 · 원장 확인 대기',
       roster: 'Leo · 2020. 01. •• · 토끼반',
       existing: '기존 보호자 연결 없음',
       confirmationText: 'Leo',
@@ -511,8 +514,12 @@ function Approvals({
               <dd>{selected.relationship}</dd>
             </div>
             <div>
-              <dt>인증 전화번호</dt>
+              <dt>전화번호 상태</dt>
               <dd>{selected.phone}</dd>
+            </div>
+            <div>
+              <dt>법적 보호자 상태</dt>
+              <dd>{selected.legalAuthority}</dd>
             </div>
             <div>
               <dt>명단 대조 결과</dt>
@@ -525,7 +532,8 @@ function Approvals({
           </dl>
           <aside>
             <Icon name="shield" size={20} />
-            이름과 생년월일 일부, 관계, 반 배정을 모두 확인해야 승인할 수 있어요.
+            전화번호 확인은 번호 사용만 확인합니다. 이름·생년월일 일부·관계와
+            법적 보호자 정보를 별도로 대조해야 승인할 수 있어요.
           </aside>
           <footer>
             <button

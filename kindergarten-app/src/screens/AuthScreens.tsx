@@ -1,8 +1,22 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '../data'
 import { Icon } from '../components/Icon'
 import { ForestBackdrop, TreeLogo } from '../components/TreeLogo'
+import {
+  DEMO_PHONE_CODE,
+  GUARDIAN_RELATIONSHIP_OPTIONS,
+  LEGAL_AUTHORITY_OPTIONS,
+  formatUsPhoneInput,
+  getLegalAuthorityLabel,
+  getRelationshipLabel,
+  isStructurallyValidUsPhone,
+  toUsE164,
+} from '../signupModel'
+import type {
+  GuardianRelationship,
+  LegalAuthorityClaim,
+} from '../signupModel'
 import type { Role } from '../types'
 
 type Navigate = (destination: 'welcome' | 'login' | 'signup' | 'pending') => void
@@ -237,24 +251,38 @@ export function LoginScreen({
 
 type SignupForm = {
   role: Exclude<Role, 'director'>
+  roleSelected: boolean
   userId: string
   password: string
   passwordConfirm: string
+  applicantName: string
   phone: string
+  smsVerificationConsent: boolean
+  phoneDemoChecked: boolean
   koreanName: string
   englishName: string
   birthDate: string
+  relationship: GuardianRelationship
+  relationshipOther: string
+  legalAuthorityClaim: LegalAuthorityClaim
 }
 
 const initialSignupForm: SignupForm = {
   role: 'parent',
+  roleSelected: false,
   userId: '',
   password: '',
   passwordConfirm: '',
+  applicantName: '',
   phone: '',
+  smsVerificationConsent: false,
+  phoneDemoChecked: false,
   koreanName: '',
   englishName: '',
   birthDate: '',
+  relationship: 'father',
+  relationshipOther: '',
+  legalAuthorityClaim: 'unsure',
 }
 
 let signupDraft: SignupForm = { ...initialSignupForm }
@@ -276,8 +304,20 @@ export function SignupScreen({
   const [step, setStep] = useState(signupDraftStep)
   const [form, setForm] = useState(() => ({ ...signupDraft }))
   const [error, setError] = useState('')
+  const [phoneCode, setPhoneCode] = useState('')
+  const [phoneCodeSent, setPhoneCodeSent] = useState(false)
+  const [phoneCodeError, setPhoneCodeError] = useState('')
 
   const maxBirthDate = useMemo(() => getLocalDateString(), [])
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const heading = document.querySelector<HTMLElement>('.signup-header h1')
+      heading?.focus({ preventScroll: true })
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [step])
 
   const updateField = <Key extends keyof SignupForm>(
     key: Key,
@@ -292,14 +332,88 @@ export function SignupScreen({
   }
 
   const goToStep = (nextStep: number) => {
-    const safeStep = Math.max(1, Math.min(4, nextStep))
+    const safeStep = Math.max(1, Math.min(5, nextStep))
     signupDraftStep = safeStep
     setStep(safeStep)
     setError('')
   }
 
-  const validateCurrentStep = () => {
-    if (step === 2) {
+  const updatePhone = (value: string) => {
+    const nextPhone = formatUsPhoneInput(value)
+
+    setForm((current) => {
+      const next = {
+        ...current,
+        phone: nextPhone,
+        phoneDemoChecked: false,
+      }
+      signupDraft = next
+      return next
+    })
+    setPhoneCode('')
+    setPhoneCodeSent(false)
+    setPhoneCodeError('')
+    setError('')
+  }
+
+  const selectRole = (role: SignupForm['role']) => {
+    setForm((current) => {
+      const next = { ...current, role, roleSelected: true }
+      signupDraft = next
+      return next
+    })
+    setError('')
+  }
+
+  const selectRelationship = (relationship: GuardianRelationship) => {
+    setForm((current) => {
+      const next = {
+        ...current,
+        relationship,
+        relationshipOther:
+          relationship === 'other' ? current.relationshipOther : '',
+      }
+      signupDraft = next
+      return next
+    })
+    setError('')
+  }
+
+  const startPhoneDemo = () => {
+    if (!isStructurallyValidUsPhone(form.phone)) {
+      setError('미국 전화번호 10자리를 확인해 주세요.')
+      return
+    }
+
+    if (!form.smsVerificationConsent) {
+      setError('가입 인증 문자 안내를 확인하고 동의해 주세요.')
+      return
+    }
+
+    setError('')
+    setPhoneCode('')
+    setPhoneCodeError('')
+    setPhoneCodeSent(true)
+    updateField('phoneDemoChecked', false)
+  }
+
+  const checkPhoneDemoCode = () => {
+    if (phoneCode !== DEMO_PHONE_CODE) {
+      setPhoneCodeError('화면에 표시된 6자리 데모 번호를 입력해 주세요.')
+      updateField('phoneDemoChecked', false)
+      return
+    }
+
+    setPhoneCodeError('')
+    updateField('phoneDemoChecked', true)
+  }
+
+  const validateStep = (stepToValidate: number) => {
+    if (stepToValidate === 1 && !form.roleSelected) {
+      return '학부모 또는 교사를 선택해 주세요.'
+    }
+
+    if (stepToValidate === 2) {
       if (form.userId.trim().length < 4) {
         return '아이디는 4자 이상으로 입력해 주세요.'
       }
@@ -311,11 +425,25 @@ export function SignupScreen({
       }
     }
 
-    if (step === 3) {
-      if (form.phone.replace(/\D/g, '').length < 10) {
-        return '테스트용 전화번호 형식을 확인해 주세요.'
+    if (stepToValidate === 3) {
+      if (form.applicantName.trim().length < 2) {
+        return '신청자 이름을 2자 이상 입력해 주세요.'
       }
 
+      if (!isStructurallyValidUsPhone(form.phone)) {
+        return '미국 전화번호 10자리를 확인해 주세요.'
+      }
+
+      if (!form.smsVerificationConsent) {
+        return '가입 인증 문자 안내를 확인하고 동의해 주세요.'
+      }
+
+      if (!form.phoneDemoChecked) {
+        return '무료 시제품의 전화번호 확인 화면을 먼저 완료해 주세요.'
+      }
+    }
+
+    if (stepToValidate === 4) {
       if (
         form.role === 'parent' &&
         !form.koreanName.trim() &&
@@ -331,13 +459,28 @@ export function SignupScreen({
       if (form.birthDate && form.birthDate > maxBirthDate) {
         return '미래 날짜는 생년월일로 선택할 수 없어요.'
       }
+
+      if (
+        form.role === 'parent' &&
+        form.relationship === 'other' &&
+        !form.relationshipOther.trim()
+      ) {
+        return '아이와의 관계를 직접 입력해 주세요.'
+      }
+
+      if (
+        form.role === 'parent' &&
+        form.relationshipOther.trim().length > 50
+      ) {
+        return '기타 관계는 50자 이내로 입력해 주세요.'
+      }
     }
 
     return ''
   }
 
   const goNext = () => {
-    const nextError = validateCurrentStep()
+    const nextError = validateStep(step)
     if (nextError) {
       setError(nextError)
       return
@@ -348,15 +491,39 @@ export function SignupScreen({
   }
 
   const submitApplication = () => {
-    signupDraft = form
-    signupDraftStep = 4
+    for (const stepToValidate of [1, 2, 3, 4]) {
+      const nextError = validateStep(stepToValidate)
+      if (nextError) {
+        goToStep(stepToValidate)
+        setError(nextError)
+        return
+      }
+    }
+
+    signupDraft = {
+      ...form,
+      password: '',
+      passwordConfirm: '',
+      phoneDemoChecked: false,
+    }
+    signupDraftStep = 1
     navigate('pending')
   }
 
   return (
     <main className="auth-shell signup-shell">
       <ForestBackdrop />
-      <section className="auth-card signup-card">
+      <form
+        className="auth-card signup-card"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (step < 5) {
+            goNext()
+          } else {
+            submitApplication()
+          }
+        }}
+      >
         <header className="signup-header">
           <button
             aria-label={step === 1 ? '이전 화면으로' : '이전 단계로'}
@@ -370,25 +537,30 @@ export function SignupScreen({
           </button>
           <div>
             <p>가입 신청</p>
-            <h1>
+            <h1 tabIndex={-1}>
               {step === 1 && '어떤 분이신가요?'}
               {step === 2 && '로그인 정보를 정해요'}
-              {step === 3 && '신청 정보를 확인해요'}
-              {step === 4 && '마지막으로 검토해요'}
+              {step === 3 && '연락처를 확인해요'}
+              {step === 4 &&
+                (form.role === 'parent'
+                  ? '아이와의 관계를 알려주세요'
+                  : '교사 신청을 확인해요')}
+              {step === 5 && '마지막으로 검토해요'}
             </h1>
           </div>
-          <span className="step-count">{step} / 4</span>
+          <span className="step-count">{step} / 5</span>
         </header>
 
         <div
           aria-label={`가입 신청 ${step}단계`}
-          aria-valuemax={4}
+          aria-valuemax={5}
           aria-valuemin={1}
           aria-valuenow={step}
+          aria-valuetext={`${step} / 5 단계`}
           className="step-progress"
           role="progressbar"
         >
-          {[1, 2, 3, 4].map((item) => (
+          {[1, 2, 3, 4, 5].map((item) => (
             <span className={item <= step ? 'active' : ''} key={item} />
           ))}
         </div>
@@ -402,10 +574,12 @@ export function SignupScreen({
           <div className="role-choice-list">
             {(['parent', 'teacher'] as const).map((role) => (
               <button
-                aria-pressed={form.role === role}
-                className={form.role === role ? 'selected' : ''}
+                aria-pressed={form.roleSelected && form.role === role}
+                className={
+                  form.roleSelected && form.role === role ? 'selected' : ''
+                }
                 key={role}
-                onClick={() => updateField('role', role)}
+                onClick={() => selectRole(role)}
                 type="button"
               >
                 <span className="role-choice-icon">
@@ -475,24 +649,139 @@ export function SignupScreen({
         {step === 3 && (
           <div className="stacked-form">
             <label>
-              <span>전화번호</span>
+              <span>신청자 이름</span>
               <input
                 aria-describedby={error ? 'signup-error' : undefined}
                 aria-invalid={Boolean(error)}
-                autoComplete="tel"
-                inputMode="tel"
-                onChange={(event) => updateField('phone', event.target.value)}
-                placeholder="예: 010-0000-0000"
-                value={form.phone}
+                autoComplete="name"
+                onChange={(event) =>
+                  updateField('applicantName', event.target.value)
+                }
+                placeholder="예: Jiwoo Park"
+                value={form.applicantName}
               />
-              <small className="field-helper">
-                문자 인증은 비용이 발생할 수 있어 현재 무료 시제품에서는 연결하지
-                않았어요.
-              </small>
             </label>
 
+            <div className="phone-verification-block">
+              <label>
+                <span>미국 휴대전화 번호</span>
+                <div className="phone-input-row">
+                  <span aria-hidden="true">+1</span>
+                  <input
+                    aria-describedby="phone-format-help"
+                    aria-invalid={
+                      Boolean(form.phone) &&
+                      !isStructurallyValidUsPhone(form.phone)
+                    }
+                    autoComplete="tel-national"
+                    inputMode="tel"
+                    onChange={(event) => updatePhone(event.target.value)}
+                    placeholder="(714) 555-0123"
+                    value={form.phone}
+                  />
+                </div>
+                <small className="field-helper" id="phone-format-help">
+                  미국·캐나다 번호는 +1 국제 형식으로 저장할 예정이에요.
+                </small>
+              </label>
+
+              <label className="consent-check">
+                <input
+                  checked={form.smsVerificationConsent}
+                  onChange={(event) => {
+                    updateField(
+                      'smsVerificationConsent',
+                      event.target.checked,
+                    )
+                    if (!event.target.checked) {
+                      updateField('phoneDemoChecked', false)
+                      setPhoneCodeSent(false)
+                      setPhoneCode('')
+                    }
+                  }}
+                  type="checkbox"
+                />
+                <span>
+                  가입 시 전화번호 확인을 위한 인증문자 수신 안내를
+                  확인했습니다. 실제 운영 시 통신사 문자 요금이 발생할 수
+                  있습니다.
+                </span>
+              </label>
+
+              <button
+                className="secondary-button phone-demo-button"
+                disabled={
+                  !isStructurallyValidUsPhone(form.phone) ||
+                  !form.smsVerificationConsent
+                }
+                onClick={startPhoneDemo}
+                type="button"
+              >
+                {phoneCodeSent ? '데모 번호 다시 보기' : '인증 화면 체험하기'}
+              </button>
+
+              {phoneCodeSent && (
+                <div className="demo-code-panel">
+                  <p>
+                    <strong>실제 문자는 발송되지 않았어요.</strong>
+                    화면 테스트용 번호 <b>{DEMO_PHONE_CODE}</b>를 아래에
+                    입력해 주세요.
+                  </p>
+                  <div>
+                    <input
+                      aria-label="6자리 데모 인증번호"
+                      autoComplete="one-time-code"
+                      inputMode="numeric"
+                      maxLength={6}
+                      onChange={(event) => {
+                        setPhoneCode(
+                          event.target.value.replace(/\D/g, '').slice(0, 6),
+                        )
+                        setPhoneCodeError('')
+                        updateField('phoneDemoChecked', false)
+                      }}
+                      placeholder="6자리"
+                      value={phoneCode}
+                    />
+                    <button
+                      className="outline-button"
+                      onClick={checkPhoneDemoCode}
+                      type="button"
+                    >
+                      확인
+                    </button>
+                  </div>
+                  {phoneCodeError && (
+                    <span className="phone-code-error" role="alert">
+                      {phoneCodeError}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <p
+                aria-live="polite"
+                className={`phone-demo-status ${
+                  form.phoneDemoChecked ? 'checked' : ''
+                }`}
+                role="status"
+              >
+                <Icon
+                  name={form.phoneDemoChecked ? 'check' : 'lock'}
+                  size={18}
+                />
+                {form.phoneDemoChecked
+                  ? '데모 절차 확인 완료 · 실제 전화번호 인증은 아닙니다.'
+                  : '실제 SMS 인증은 유료 서비스 연결 전까지 비활성 상태입니다.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {step === 4 && (
+          <>
             {form.role === 'parent' ? (
-              <>
+              <div className="stacked-form">
                 <div className="two-field-grid">
                   <label>
                     <span>아이 한국 이름</span>
@@ -525,30 +814,121 @@ export function SignupScreen({
                     aria-describedby={error ? 'signup-error' : undefined}
                     aria-invalid={Boolean(error)}
                     max={maxBirthDate}
-                    onChange={(event) => updateField('birthDate', event.target.value)}
+                    onInput={(event) =>
+                      updateField('birthDate', event.currentTarget.value)
+                    }
                     type="date"
                     value={form.birthDate}
                   />
                 </label>
+
+                <fieldset className="choice-fieldset relationship-fieldset">
+                  <legend>아이와의 관계</legend>
+                  <div className="relationship-options">
+                    {GUARDIAN_RELATIONSHIP_OPTIONS.map((option) => (
+                      <label
+                        className={
+                          form.relationship === option.value ? 'selected' : ''
+                        }
+                        key={option.value}
+                      >
+                        <input
+                          checked={form.relationship === option.value}
+                          name="guardian-relationship"
+                          onChange={() => selectRelationship(option.value)}
+                          type="radio"
+                          value={option.value}
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                {form.relationship === 'other' && (
+                  <label>
+                    <span>기타 관계 직접 입력</span>
+                    <input
+                      aria-describedby={error ? 'signup-error' : undefined}
+                      aria-invalid={Boolean(error)}
+                      maxLength={50}
+                      onChange={(event) =>
+                        updateField('relationshipOther', event.target.value)
+                      }
+                      placeholder="예: 이모, 삼촌, 위탁 보호자"
+                      value={form.relationshipOther}
+                    />
+                    <small className="field-helper">
+                      50자 이내로 입력해 주세요.
+                    </small>
+                  </label>
+                )}
+
+                <fieldset className="choice-fieldset authority-fieldset">
+                  <legend>
+                    아이의 법적 부모 또는 법적 보호자입니까?
+                  </legend>
+                  <div>
+                    {LEGAL_AUTHORITY_OPTIONS.map((option) => (
+                      <label
+                        className={
+                          form.legalAuthorityClaim === option.value
+                            ? 'selected'
+                            : ''
+                        }
+                        key={option.value}
+                      >
+                        <input
+                          checked={
+                            form.legalAuthorityClaim === option.value
+                          }
+                          name="legal-authority"
+                          onChange={() =>
+                            updateField(
+                              'legalAuthorityClaim',
+                              option.value,
+                            )
+                          }
+                          type="radio"
+                          value={option.value}
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
                 <p className="matching-explanation">
-                  원장이 유치원 원아 명단과 확인한 뒤 보호자와 아이를 연결합니다.
-                  이름만으로 자동 연결하지 않아요.
+                  관계 선택과 전화번호 확인만으로 아이 자료가 열리지 않아요.
+                  원장이 유치원 원아 명단과 보호자 정보를 별도로 확인한 뒤
+                  아이를 연결합니다.
                 </p>
-              </>
+              </div>
             ) : (
-              <div className="matching-explanation teacher-explanation">
-                가입 승인 후 원장이 담당 반과 공지·식단 작성 권한을 지정합니다.
-                교사가 스스로 권한을 늘릴 수는 없어요.
+              <div className="teacher-application-card">
+                <Icon name="shield" size={25} />
+                <div>
+                  <strong>교직원 명단 확인 후 승인됩니다</strong>
+                  <p>
+                    원장이 신청자 이름과 재직 정보를 확인한 뒤 담당 반과
+                    필요한 권한만 지정합니다. 교사가 스스로 권한을 늘릴 수는
+                    없어요.
+                  </p>
+                </div>
               </div>
             )}
-          </div>
+          </>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <div className="review-card">
             <div>
               <span>신청 역할</span>
               <strong>{ROLE_LABELS[form.role]}</strong>
+            </div>
+            <div>
+              <span>신청자 이름</span>
+              <strong>{form.applicantName || '입력 전'}</strong>
             </div>
             <div>
               <span>아이디</span>
@@ -556,7 +936,15 @@ export function SignupScreen({
             </div>
             <div>
               <span>전화번호</span>
-              <strong>{form.phone || '입력 전'}</strong>
+              <strong>{form.phone ? `+1 ${form.phone}` : '입력 전'}</strong>
+            </div>
+            <div>
+              <span>전화 확인</span>
+              <strong>
+                {form.phoneDemoChecked
+                  ? '데모 절차 확인 · 실제 인증 아님'
+                  : '확인 전'}
+              </strong>
             </div>
             {form.role === 'parent' && (
               <>
@@ -571,10 +959,27 @@ export function SignupScreen({
                   <span>생년월일</span>
                   <strong>{form.birthDate || '입력 전'}</strong>
                 </div>
+                <div>
+                  <span>아이와의 관계</span>
+                  <strong>
+                    {getRelationshipLabel(
+                      form.relationship,
+                      form.relationshipOther,
+                    )}
+                  </strong>
+                </div>
+                <div>
+                  <span>법적 보호자 응답</span>
+                  <strong>
+                    {getLegalAuthorityLabel(form.legalAuthorityClaim)}
+                    {' · 원장 확인 필요'}
+                  </strong>
+                </div>
               </>
             )}
             <p>
-              실제 운영에서는 전화 인증과 원장 확인이 끝난 뒤에만 앱을 사용할 수
+              실제 운영에서는 {toUsE164(form.phone) ?? '전화번호'}에 대한
+              SMS 인증과 원장 확인이 각각 끝난 뒤에만 앱을 사용할 수
               있습니다.
             </p>
           </div>
@@ -587,22 +992,18 @@ export function SignupScreen({
         )}
 
         <footer className="signup-footer">
-          {step < 4 ? (
-            <button className="primary-button" onClick={goNext} type="button">
+          {step < 5 ? (
+            <button className="primary-button" type="submit">
               다음 단계
               <Icon name="chevron" size={20} />
             </button>
           ) : (
-            <button
-              className="primary-button"
-              onClick={submitApplication}
-              type="button"
-            >
+            <button className="primary-button" type="submit">
               가입 신청 보내기
             </button>
           )}
         </footer>
-      </section>
+      </form>
     </main>
   )
 }

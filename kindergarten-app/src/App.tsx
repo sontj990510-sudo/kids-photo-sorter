@@ -29,14 +29,15 @@ const VALID_MENUS = new Set<MenuKey>([
 ])
 
 function parseScreen(): AppScreen {
-  if (typeof window === 'undefined') {
+  if (typeof globalThis.window === 'undefined') {
     return 'splash'
   }
 
-  const raw = window.location.hash.replace(/^#\/?/, '')
+  const browserWindow = globalThis.window
+  const raw = browserWindow.location.hash.replace(/^#\/?/, '')
 
   if (!raw) {
-    return window.localStorage.getItem('gt-kindergarten-intro-seen')
+    return browserWindow.localStorage.getItem('gt-kindergarten-intro-seen')
       ? 'welcome'
       : 'splash'
   }
@@ -61,19 +62,21 @@ function parseScreen(): AppScreen {
 }
 
 function loadDemoRole(): Role | null {
-  if (typeof window === 'undefined') {
+  if (typeof globalThis.window === 'undefined') {
     return null
   }
 
-  const stored = window.sessionStorage.getItem('gt-kindergarten-demo-role')
+  const stored = globalThis.window.sessionStorage.getItem(
+    'gt-kindergarten-demo-role',
+  )
   return stored === 'director' || stored === 'teacher' || stored === 'parent'
     ? stored
     : null
 }
 
 function App() {
-  const [screen, setScreen] = useState<AppScreen>(parseScreen)
-  const [role, setRole] = useState<Role | null>(loadDemoRole)
+  const [screen, setScreen] = useState<AppScreen>('splash')
+  const [role, setRole] = useState<Role | null>(null)
   const [safetyAction, setSafetyAction] = useState<SafetyAction | null>(null)
   const [toast, setToast] = useState('')
 
@@ -102,12 +105,20 @@ function App() {
     const handleHashChange = () => setScreen(parseScreen())
     window.addEventListener('hashchange', handleHashChange)
 
-    if (!window.location.hash) {
+    const initialStateTimer = window.setTimeout(() => {
       const initialScreen = parseScreen()
-      window.history.replaceState(null, '', `#/${initialScreen}`)
-    }
+      setScreen(initialScreen)
+      setRole(loadDemoRole())
 
-    return () => window.removeEventListener('hashchange', handleHashChange)
+      if (!window.location.hash) {
+        window.history.replaceState(null, '', `#/${initialScreen}`)
+      }
+    }, 0)
+
+    return () => {
+      window.clearTimeout(initialStateTimer)
+      window.removeEventListener('hashchange', handleHashChange)
+    }
   }, [])
 
   useEffect(() => {
