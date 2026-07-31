@@ -54,6 +54,9 @@ type LearningConflict = PendingLearning & {
 
 type ShareReceipt = {
   count: number
+  totalCount: number
+  completedBatches: number
+  totalBatches: number
   completedAt: string
 }
 
@@ -147,12 +150,47 @@ const REQUIRED_REPRESENTATIVE_PHOTOS = REPRESENTATIVE_PHOTO_SLOTS.length
 const MAX_ADDITIONAL_PHOTOS = 20
 const MIN_CLASS_SIZE = 1
 const MAX_CLASS_SIZE = 40
+const SHARE_BATCH_SIZE = 20
 
 function formatReceiptTime(completedAt: string) {
   return new Date(completedAt).toLocaleTimeString('ko-KR', {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function getShareButtonLabel(
+  totalCount: number,
+  receipt: ShareReceipt | undefined,
+  defaultLabel: string,
+) {
+  const totalBatches = Math.ceil(totalCount / SHARE_BATCH_SIZE)
+
+  if (totalBatches <= 1) {
+    return receipt?.totalCount === totalCount && receipt.count >= totalCount
+      ? '사진 다시 공유'
+      : defaultLabel
+  }
+
+  if (receipt?.totalCount === totalCount && receipt.count >= totalCount) {
+    return '처음부터 다시 공유'
+  }
+
+  const sharedCount = receipt?.totalCount === totalCount ? receipt.count : 0
+  const nextBatch = Math.floor(sharedCount / SHARE_BATCH_SIZE) + 1
+  const nextBatchCount = Math.min(SHARE_BATCH_SIZE, totalCount - sharedCount)
+
+  return `${nextBatch}/${totalBatches} 묶음 공유 (${nextBatchCount}장)`
+}
+
+function getShareReceiptLabel(receipt: ShareReceipt) {
+  const time = formatReceiptTime(receipt.completedAt)
+
+  if (receipt.count >= receipt.totalCount) {
+    return `✓ 전체 공유 완료 · ${receipt.completedBatches}/${receipt.totalBatches}묶음 · ${receipt.totalCount}장 · ${time}`
+  }
+
+  return `✓ ${receipt.completedBatches}/${receipt.totalBatches}묶음 완료 · ${receipt.count}/${receipt.totalCount}장 · 다음 묶음을 눌러주세요 · ${time}`
 }
 
 function GivingTreeMark() {
@@ -1225,28 +1263,52 @@ function App() {
       return
     }
 
+    const previousReceipt = shareReceipts[receiptKey]
+    const shouldContinue =
+      previousReceipt?.totalCount === files.length && previousReceipt.count < files.length
+    const batchStart = shouldContinue ? previousReceipt.count : 0
+    const batchFiles = files.slice(batchStart, batchStart + SHARE_BATCH_SIZE)
+    const totalBatches = Math.ceil(files.length / SHARE_BATCH_SIZE)
+    const batchNumber = Math.floor(batchStart / SHARE_BATCH_SIZE) + 1
+    const batchSuffix = totalBatches > 1 ? ` (${batchNumber}/${totalBatches})` : ''
     const sharePayload = {
-      files,
-      title,
-      text,
+      files: batchFiles,
+      title: `${title}${batchSuffix}`,
+      text:
+        totalBatches > 1
+          ? `${text}\n${batchNumber}/${totalBatches} 묶음 · ${batchFiles.length}장`
+          : text,
     }
 
     try {
       if (navigator.canShare?.(sharePayload)) {
         await navigator.share(sharePayload)
+        const sharedCount = batchStart + batchFiles.length
+        const completedAt = new Date().toISOString()
         setShareReceipts((previousReceipts) => ({
           ...previousReceipts,
           [receiptKey]: {
-            count: files.length,
-            completedAt: new Date().toISOString(),
+            count: sharedCount,
+            totalCount: files.length,
+            completedBatches: batchNumber,
+            totalBatches,
+            completedAt,
           },
         }))
-        setStatusMessage(successMessage)
+        setStatusMessage(
+          sharedCount >= files.length
+            ? successMessage
+            : `${batchNumber}/${totalBatches} 묶음 ${batchFiles.length}장을 공유했어요. 다음 묶음 버튼을 눌러 계속해 주세요.`,
+        )
       } else {
         setStatusMessage('이 기기에서는 사진 파일 공유가 지원되지 않아요. 사진을 직접 저장한 뒤 보내주세요.')
       }
     } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
+        setStatusMessage(
+          `${batchNumber}/${totalBatches} 묶음 공유를 취소했어요. 다시 누르면 같은 묶음부터 시작해요.`,
+        )
+      } else {
         setStatusMessage('공유를 완료하지 못했어요. 잠시 후 다시 시도해 주세요.')
       }
     }
@@ -1263,13 +1325,24 @@ function App() {
   }
 
   const handleShareChildPhotos = async (child: ChildRecord, items: PreviewItem[]) => {
-    const confirmed = window.confirm(
-      `${child.name} 사진 ${items.length}장을 직접 확인했나요?\n\n` +
-        'AI 분류는 틀릴 수 있으므로 다른 아이 사진이 포함되지 않았는지 확인한 뒤 보내주세요.',
-    )
+    const receipt = shareReceipts[child.id]
+    const isContinuing =
+      receipt?.totalCount === items.length && receipt.count < items.length
 
-    if (!confirmed) {
-      return
+    if (!isContinuing) {
+      const totalBatches = Math.ceil(items.length / SHARE_BATCH_SIZE)
+      const batchGuide =
+        totalBatches > 1
+          ? `\n\n20장씩 총 ${totalBatches}번으로 나누어 공유합니다.`
+          : ''
+      const confirmed = window.confirm(
+        `${child.name} 사진 ${items.length}장을 직접 확인했나요?${batchGuide}\n\n` +
+          'AI 분류는 틀릴 수 있으므로 다른 아이 사진이 포함되지 않았는지 확인한 뒤 보내주세요.',
+      )
+
+      if (!confirmed) {
+        return
+      }
     }
 
     await shareFiles(
@@ -2425,7 +2498,11 @@ function App() {
                   onClick={handleShare}
                   disabled={selectedFiles.length === 0 || isAnalyzing || isPreparingProfiles}
                 >
-                  카카오톡으로 공유
+                  {getShareButtonLabel(
+                    selectedFiles.length,
+                    shareReceipts.all,
+                    '카카오톡으로 공유',
+                  )}
                 </button>
               </div>
 
@@ -2455,10 +2532,16 @@ function App() {
                 </p>
               </div>
 
-              {shareReceipts.all ? (
+              {selectedFiles.length > SHARE_BATCH_SIZE ? (
+                <p className="share-batch-note">
+                  한 번에 20장씩 총 {Math.ceil(selectedFiles.length / SHARE_BATCH_SIZE)}
+                  묶음으로 나눠 공유해요. 한 묶음이 끝날 때마다 다음 묶음 버튼을 눌러주세요.
+                </p>
+              ) : null}
+
+              {shareReceipts.all?.totalCount === selectedFiles.length ? (
                 <p className="share-receipt" role="status">
-                  ✓ 전송 완료 · {shareReceipts.all.count}장 ·{' '}
-                  {formatReceiptTime(shareReceipts.all.completedAt)}
+                  {getShareReceiptLabel(shareReceipts.all)}
                 </p>
               ) : null}
 
@@ -2732,7 +2815,11 @@ function App() {
                             onClick={() => void handleShareChildPhotos(child, items)}
                             disabled={isAnalyzing || items.length === 0}
                           >
-                            {child.name} 사진 공유
+                            {getShareButtonLabel(
+                              items.length,
+                              shareReceipts[child.id],
+                              `${child.name} 사진 공유`,
+                            )}
                           </button>
                         </div>
                       </div>
@@ -2740,10 +2827,16 @@ function App() {
                         다른 아이 사진이 섞였다면 사진 오른쪽 위의 X를 눌러 이 공유 목록에서만
                         제외하세요.
                       </p>
-                      {shareReceipts[child.id] ? (
+                      {items.length > SHARE_BATCH_SIZE ? (
+                        <p className="share-batch-note">
+                          20장씩 총 {Math.ceil(items.length / SHARE_BATCH_SIZE)}
+                          묶음으로 나눠 공유해요. 한 묶음이 끝날 때마다 다음 묶음 버튼을
+                          눌러주세요.
+                        </p>
+                      ) : null}
+                      {shareReceipts[child.id]?.totalCount === items.length ? (
                         <p className="share-receipt" role="status">
-                          ✓ 전송 완료 · {shareReceipts[child.id].count}장 ·{' '}
-                          {formatReceiptTime(shareReceipts[child.id].completedAt)}
+                          {getShareReceiptLabel(shareReceipts[child.id])}
                         </p>
                       ) : null}
                       <div className="result-photo-grid">
