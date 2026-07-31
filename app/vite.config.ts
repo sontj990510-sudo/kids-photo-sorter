@@ -19,8 +19,17 @@ function resolveBasePath() {
     return '/'
   }
 
-  const repositoryName = process.env.GITHUB_REPOSITORY?.split('/').pop()
-  return repositoryName ? `/${repositoryName}/` : '/kids-photo-sorter/'
+  const [repositoryOwner, repositoryName] =
+    process.env.GITHUB_REPOSITORY?.split('/') ?? []
+
+  if (
+    repositoryOwner &&
+    repositoryName?.toLowerCase() === `${repositoryOwner.toLowerCase()}.github.io`
+  ) {
+    return '/'
+  }
+
+  return repositoryName ? `/${repositoryName}/` : '/'
 }
 
 // https://vite.dev/config/
