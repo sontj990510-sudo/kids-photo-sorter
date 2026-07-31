@@ -3,6 +3,11 @@ import { MENU_TITLES, ROLE_LABELS } from '../data'
 import { Icon } from '../components/Icon'
 import type { MenuKey, Role, SafetyAction } from '../types'
 
+const DEMO_TEACHER_PERMISSIONS = {
+  canWriteGlobalNotice: true,
+  canEditMeals: false,
+}
+
 type MenuScreenProps = {
   menu: MenuKey
   role: Role
@@ -48,7 +53,9 @@ function GlobalNotices({
 }) {
   return (
     <div className="content-stack">
-      {(role === 'director' || role === 'teacher') && (
+      {(role === 'director' ||
+        (role === 'teacher' &&
+          DEMO_TEACHER_PERMISSIONS.canWriteGlobalNotice)) && (
         <button
           className="compose-card"
           onClick={() =>
@@ -105,7 +112,13 @@ function GlobalNotices({
   )
 }
 
-function ClassNote({ role }: { role: Role }) {
+function ClassNote({
+  role,
+  onToast,
+}: {
+  role: Role
+  onToast: (message: string) => void
+}) {
   return (
     <div className="content-stack">
       <section className="class-day-card">
@@ -117,7 +130,13 @@ function ClassNote({ role }: { role: Role }) {
       </section>
 
       {role === 'teacher' && (
-        <button className="compose-card" type="button">
+        <button
+          className="compose-card"
+          onClick={() =>
+            onToast('알림장 작성 화면은 다음 단계에서 연결합니다.')
+          }
+          type="button"
+        >
           <span>
             <Icon name="note" size={23} />
           </span>
@@ -150,14 +169,27 @@ function ClassNote({ role }: { role: Role }) {
         </div>
         <footer>
           <span>읽었어요 11 / 12</span>
-          <button type="button">댓글 3개</button>
+          <button
+            onClick={() =>
+              onToast('댓글 화면은 다음 단계에서 연결합니다.')
+            }
+            type="button"
+          >
+            댓글 3개
+          </button>
         </footer>
       </article>
     </div>
   )
 }
 
-function MealMenu({ role }: { role: Role }) {
+function MealMenu({
+  role,
+  onToast,
+}: {
+  role: Role
+  onToast: (message: string) => void
+}) {
   const weekdays = [
     { day: '월', date: '27', meal: '소고기 미역국', snack: '바나나·우유' },
     { day: '화', date: '28', meal: '닭고기 카레라이스', snack: '찐옥수수' },
@@ -169,19 +201,28 @@ function MealMenu({ role }: { role: Role }) {
   return (
     <div className="content-stack">
       <section className="month-selector">
-        <button aria-label="이전 달" type="button">
+        <button
+          aria-label="이전 달"
+          onClick={() => onToast('6월 식단 미리보기는 준비 중이에요.')}
+          type="button"
+        >
           <Icon name="back" size={19} />
         </button>
         <div>
           <span>2026년</span>
           <strong>7월 식단</strong>
         </div>
-        <button aria-label="다음 달" type="button">
+        <button
+          aria-label="다음 달"
+          onClick={() => onToast('8월 식단 미리보기는 준비 중이에요.')}
+          type="button"
+        >
           <Icon name="chevron" size={19} />
         </button>
       </section>
 
-      {(role === 'director' || role === 'teacher') && (
+      {(role === 'director' ||
+        (role === 'teacher' && DEMO_TEACHER_PERMISSIONS.canEditMeals)) && (
         <aside className="permission-note">
           <Icon name="shield" size={20} />
           <span>
@@ -189,6 +230,16 @@ function MealMenu({ role }: { role: Role }) {
               {role === 'director' ? '원장 작성 권한' : '위임된 식단 작성 권한'}
             </strong>
             게시 전 적용 월과 알림 발송 여부를 확인합니다.
+          </span>
+        </aside>
+      )}
+
+      {role === 'teacher' && !DEMO_TEACHER_PERMISSIONS.canEditMeals && (
+        <aside className="permission-note read-only">
+          <Icon name="lock" size={20} />
+          <span>
+            <strong>식단 열람만 가능</strong>
+            현재 데모 교사에게는 식단 작성 권한이 위임되지 않았습니다.
           </span>
         </aside>
       )}
@@ -261,6 +312,49 @@ function NotificationSettings({ onToast }: { onToast: (message: string) => void 
 
   return (
     <div className="content-stack">
+      <section className="notification-feed" aria-labelledby="notification-feed-title">
+        <header>
+          <div>
+            <span>NEW</span>
+            <h2 id="notification-feed-title">새 소식</h2>
+          </div>
+          <strong>4개</strong>
+        </header>
+        <button
+          onClick={() => onToast('판다반 알림장을 열었어요.')}
+          type="button"
+        >
+          <span className="setting-icon">
+            <Icon name="note" size={22} />
+          </span>
+          <span>
+            <strong>판다반 알림장이 도착했어요</strong>
+            <small>오늘 15:42 · 아직 읽지 않음</small>
+          </span>
+          <Icon name="chevron" size={19} />
+        </button>
+        <button
+          onClick={() => onToast('새 사진 8장 미리보기를 열었어요.')}
+          type="button"
+        >
+          <span className="setting-icon">
+            <Icon name="photo" size={22} />
+          </span>
+          <span>
+            <strong>우리 아이 새 사진 8장</strong>
+            <small>오늘 14:10 · 교사 검토 완료</small>
+          </span>
+          <Icon name="chevron" size={19} />
+        </button>
+      </section>
+
+      <div className="section-heading compact-heading">
+        <div>
+          <p>NOTIFICATION SETTINGS</p>
+          <h2>알림 받기 설정</h2>
+        </div>
+      </div>
+
       <aside className="privacy-reminder compact">
         <span>
           <Icon name="lock" size={20} />
@@ -325,14 +419,46 @@ function NotificationSettings({ onToast }: { onToast: (message: string) => void 
 
 function Approvals({
   onSafetyAction,
+  onToast,
 }: {
   onSafetyAction: (action: SafetyAction) => void
+  onToast: (message: string) => void
 }) {
   const applicants = [
-    { name: '박지우 보호자', detail: '김하린 · 판다반 신청', time: '10분 전' },
-    { name: '최윤서 교사', detail: '다람쥐반 교사 신청', time: '1시간 전' },
-    { name: '정서준 보호자', detail: 'Leo · 토끼반 신청', time: '어제' },
+    {
+      name: '박지우 보호자',
+      detail: '김하린 · 판다반 신청',
+      time: '10분 전',
+      relationship: '어머니',
+      phone: '010-••••-4821',
+      roster: '김하린 · 2019. 09. •• · 판다반',
+      existing: '아버지 보호자 1명 연결됨',
+      confirmationText: '김하린',
+    },
+    {
+      name: '최윤서 교사',
+      detail: '다람쥐반 교사 신청',
+      time: '1시간 전',
+      relationship: '교직원',
+      phone: '010-••••-1190',
+      roster: '채용 명단 확인 · 다람쥐반 예정',
+      existing: '기존 연결 없음',
+      confirmationText: '최윤서',
+    },
+    {
+      name: '정서준 보호자',
+      detail: 'Leo · 토끼반 신청',
+      time: '어제',
+      relationship: '아버지',
+      phone: '010-••••-7302',
+      roster: 'Leo · 2020. 01. •• · 토끼반',
+      existing: '기존 보호자 연결 없음',
+      confirmationText: 'Leo',
+    },
   ]
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const selected =
+    selectedIndex === null ? null : applicants[selectedIndex]
 
   return (
     <div className="content-stack">
@@ -354,22 +480,8 @@ function Approvals({
               <small>{applicant.detail}</small>
             </div>
             <button
-              onClick={() =>
-                onSafetyAction({
-                  title: '가입 신청을 승인할까요?',
-                  description:
-                    '담당 반과 연결 대상을 확인한 뒤에만 접근 권한이 열립니다.',
-                  actionLabel: '확인 후 승인',
-                  targetLabel: applicant.detail,
-                  confirmationText: index === 1 ? '최윤서' : '확인',
-                  impacts: [
-                    '승인 전에는 어떤 유치원 자료도 볼 수 없습니다.',
-                    '승인 후에도 지정된 반과 연결된 아이만 볼 수 있습니다.',
-                    '승인·거절·반 배정 내용은 관리 기록에 남습니다.',
-                  ],
-                  mode: 'schedule',
-                })
-              }
+              aria-expanded={selectedIndex === index}
+              onClick={() => setSelectedIndex(index)}
               type="button"
             >
               검토
@@ -377,6 +489,82 @@ function Approvals({
           </article>
         ))}
       </section>
+
+      {selected && (
+        <section className="approval-review-panel" aria-labelledby="approval-review-title">
+          <header>
+            <div>
+              <span>신청 정보와 원아 명단 비교</span>
+              <h2 id="approval-review-title">{selected.name}</h2>
+            </div>
+            <button
+              aria-label="가입 신청 검토 닫기"
+              onClick={() => setSelectedIndex(null)}
+              type="button"
+            >
+              ×
+            </button>
+          </header>
+          <dl>
+            <div>
+              <dt>신청자 관계</dt>
+              <dd>{selected.relationship}</dd>
+            </div>
+            <div>
+              <dt>인증 전화번호</dt>
+              <dd>{selected.phone}</dd>
+            </div>
+            <div>
+              <dt>명단 대조 결과</dt>
+              <dd>{selected.roster}</dd>
+            </div>
+            <div>
+              <dt>기존 연결</dt>
+              <dd>{selected.existing}</dd>
+            </div>
+          </dl>
+          <aside>
+            <Icon name="shield" size={20} />
+            이름과 생년월일 일부, 관계, 반 배정을 모두 확인해야 승인할 수 있어요.
+          </aside>
+          <footer>
+            <button
+              className="secondary-button"
+              onClick={() =>
+                onToast('거절 사유 입력 화면은 다음 단계에서 연결합니다.')
+              }
+              type="button"
+            >
+              거절 검토
+            </button>
+            <button
+              className="primary-button"
+              onClick={() =>
+                onSafetyAction({
+                  title: '가입 신청을 승인할까요?',
+                  description:
+                    '위 비교 정보가 실제 원아·교직원 명단과 일치하는지 마지막으로 확인합니다.',
+                  actionLabel: '확인 후 승인',
+                  targetLabel: selected.detail,
+                  confirmationText: selected.confirmationText,
+                  impacts: [
+                    '승인 전에는 어떤 유치원 자료도 볼 수 없습니다.',
+                    '승인 후에도 지정된 반과 연결된 아이만 볼 수 있습니다.',
+                    '승인·거절·반 배정 내용은 관리 기록에 남습니다.',
+                  ],
+                  mode: 'schedule',
+                  severity: 'review',
+                  successMessage:
+                    '가입 승인 검토를 완료했어요. 데모에서는 실제 권한이 변경되지 않습니다.',
+                })
+              }
+              type="button"
+            >
+              승인 최종 확인
+            </button>
+          </footer>
+        </section>
+      )}
     </div>
   )
 }
@@ -410,6 +598,10 @@ function ChildLifecycle({
         '형제자매가 있다면 보호자 계정은 계속 유지됩니다.',
       ],
       mode: isDirector ? 'schedule' : 'request',
+      severity: isDirector ? 'critical' : 'review',
+      successMessage: isDirector
+        ? '재원 종료 예약을 만들었어요. 데모에서는 실제 자료가 변경되지 않습니다.'
+        : '원장에게 보낼 재원 종료 요청을 만들었어요. 데모에서는 실제로 전송되지 않습니다.',
     })
   }
 
@@ -422,7 +614,12 @@ function ChildLifecycle({
           <strong>판다반</strong>
           <small>재원 12명 · 보호자 연결 18명</small>
         </div>
-        <button type="button">반 보기</button>
+        <button
+          onClick={() => onToast('판다반 전체 원아 화면을 열었어요.')}
+          type="button"
+        >
+          반 보기
+        </button>
       </section>
 
       <section className="child-list">
@@ -497,6 +694,9 @@ function ChildLifecycle({
                       '실행자·사유·대상·시간은 개인정보를 제외한 관리 기록에 남습니다.',
                     ],
                     mode: 'schedule',
+                    severity: 'critical',
+                    successMessage:
+                      '30일 후 영구 삭제 예약을 만들었어요. 데모에서는 실제 자료가 삭제되지 않습니다.',
                   })
                 }
                 type="button"
@@ -571,6 +771,9 @@ function StaffPermissions({
                     '변경 전후 값과 변경한 원장이 관리 기록에 남습니다.',
                   ],
                   mode: 'schedule',
+                  severity: 'review',
+                  successMessage:
+                    '교사 권한 변경 검토를 완료했어요. 데모에서는 실제 권한이 바뀌지 않습니다.',
                 })
               }
               type="button"
@@ -602,6 +805,9 @@ function StaffPermissions({
                 '근무 기록과 작성한 공지는 삭제되지 않습니다.',
               ],
               mode: 'schedule',
+              severity: 'critical',
+              successMessage:
+                '교사 접근 중지 검토를 완료했어요. 데모에서는 실제 접근이 차단되지 않습니다.',
             })
           }
           type="button"
@@ -666,7 +872,7 @@ function PhotoUpload({ onToast }: { onToast: (message: string) => void }) {
           rel="noreferrer"
           target="_blank"
         >
-          현재 사진 분류기 열기
+          현재 사진 분류기 열기 · 새 창
         </a>
         <button
           className="outline-button"
@@ -690,7 +896,15 @@ function PhotoUpload({ onToast }: { onToast: (message: string) => void }) {
   )
 }
 
-function PhotoStatus() {
+function PhotoStatus({
+  onSafetyAction,
+  onToast,
+}: {
+  onSafetyAction: (action: SafetyAction) => void
+  onToast: (message: string) => void
+}) {
+  const [excludeMissingConsent, setExcludeMissingConsent] = useState(false)
+
   return (
     <div className="content-stack">
       <section className="status-overview">
@@ -727,12 +941,89 @@ function PhotoStatus() {
           ))}
         </div>
         <p>여러 아이가 함께 나온 사진은 모든 아이의 동의 상태를 확인합니다.</p>
+        <button
+          className="outline-button"
+          onClick={() =>
+            onToast('AI가 확신하지 못한 12장 검토 화면을 열었어요.')
+          }
+          type="button"
+        >
+          검토 필요한 12장 확인
+        </button>
+      </section>
+
+      <section className="publish-safety-card">
+        <header>
+          <div>
+            <span>게시 전 최종 점검</span>
+            <h2>판다반 사진 게시 요약</h2>
+          </div>
+          <Icon name="shield" size={25} />
+        </header>
+        <dl>
+          <div>
+            <dt>게시 대상</dt>
+            <dd>판다반 보호자 18명</dd>
+          </div>
+          <div>
+            <dt>검토 완료 사진</dt>
+            <dd>154장</dd>
+          </div>
+          <div>
+            <dt>알림 발송</dt>
+            <dd>게시 후 1회</dd>
+          </div>
+          <div className="warning">
+            <dt>동의 누락</dt>
+            <dd>2명 포함 사진 6장</dd>
+          </div>
+        </dl>
+        <label className="understanding-check">
+          <input
+            checked={excludeMissingConsent}
+            onChange={(event) => setExcludeMissingConsent(event.target.checked)}
+            type="checkbox"
+          />
+          <span>동의가 확인되지 않은 아이가 나온 사진 6장을 게시 대상에서 제외합니다.</span>
+        </label>
+        {!excludeMissingConsent && (
+          <p className="publish-block-message" role="status">
+            동의 누락 사진을 제외하기 전에는 게시할 수 없어요.
+          </p>
+        )}
+        <button
+          className="primary-button"
+          disabled={!excludeMissingConsent}
+          onClick={() =>
+            onSafetyAction({
+              title: '판다반 사진 게시를 준비할까요?',
+              description:
+                '사진은 자동 게시되지 않으며, 반·사진 수·수신자·동의 상태를 다시 확인합니다.',
+              actionLabel: '게시 검토 완료',
+              targetLabel: '판다반 · 148장 · 보호자 18명',
+              confirmationText: '판다반',
+              impacts: [
+                '동의 누락 아이가 나온 사진 6장은 게시에서 제외됩니다.',
+                '각 보호자는 연결된 자녀의 검토 완료 사진만 볼 수 있습니다.',
+                '게시 후 “새 사진이 등록되었습니다” 알림이 한 번 발송됩니다.',
+                '게시자·반·사진 수·시간이 관리 기록에 남습니다.',
+              ],
+              mode: 'schedule',
+              severity: 'review',
+              successMessage:
+                '사진 게시 최종 검토를 완료했어요. 데모에서는 실제 사진이 게시되지 않습니다.',
+            })
+          }
+          type="button"
+        >
+          게시 전 최종 확인
+        </button>
       </section>
     </div>
   )
 }
 
-function ChildAlbum() {
+function ChildAlbum({ onToast }: { onToast: (message: string) => void }) {
   return (
     <div className="content-stack">
       <section className="child-switcher">
@@ -741,7 +1032,12 @@ function ChildAlbum() {
           <span>현재 보고 있는 아이</span>
           <strong>김하린 · 판다반</strong>
         </div>
-        <button type="button">
+        <button
+          onClick={() =>
+            onToast('여러 자녀 전환 화면은 다음 단계에서 연결합니다.')
+          }
+          type="button"
+        >
           아이 바꾸기
           <Icon name="chevron" size={18} />
         </button>
@@ -757,7 +1053,15 @@ function ChildAlbum() {
 
       <section className="album-grid" aria-label="아이 사진첩 데모">
         {Array.from({ length: 8 }, (_, index) => (
-          <button className={`album-placeholder album-${(index % 4) + 1}`} key={index}>
+          <button
+            aria-label={`7월 새 사진 ${index + 1}번 미리보기`}
+            className={`album-placeholder album-${(index % 4) + 1}`}
+            key={index}
+            onClick={() =>
+              onToast(`${index + 1}번 사진 상세 화면을 열었어요.`)
+            }
+            type="button"
+          >
             <span className="album-leaf" />
             <small>{index < 8 ? 'NEW' : ''}</small>
           </button>
@@ -831,10 +1135,12 @@ function Profile({
   role,
   onLogout,
   onReplayIntro,
+  onToast,
 }: {
   role: Role
   onLogout: () => void
   onReplayIntro: () => void
+  onToast: (message: string) => void
 }) {
   return (
     <div className="content-stack">
@@ -861,14 +1167,24 @@ function Profile({
           <strong>인트로 다시 보기</strong>
           <Icon name="chevron" size={20} />
         </button>
-        <button type="button">
+        <button
+          onClick={() =>
+            onToast('개인정보와 보관 정책 화면은 다음 단계에서 연결합니다.')
+          }
+          type="button"
+        >
           <span>
             <Icon name="lock" size={21} />
           </span>
           <strong>개인정보와 보관 정책</strong>
           <Icon name="chevron" size={20} />
         </button>
-        <button type="button">
+        <button
+          onClick={() =>
+            onToast('로그인된 기기 관리 화면은 다음 단계에서 연결합니다.')
+          }
+          type="button"
+        >
           <span>
             <Icon name="shield" size={21} />
           </span>
@@ -915,16 +1231,18 @@ export function MenuScreen({
       content = <GlobalNotices onToast={onToast} role={role} />
       break
     case 'class-note':
-      content = <ClassNote role={role} />
+      content = <ClassNote onToast={onToast} role={role} />
       break
     case 'meals':
-      content = <MealMenu role={role} />
+      content = <MealMenu onToast={onToast} role={role} />
       break
     case 'notifications':
       content = <NotificationSettings onToast={onToast} />
       break
     case 'approvals':
-      content = <Approvals onSafetyAction={onSafetyAction} />
+      content = (
+        <Approvals onSafetyAction={onSafetyAction} onToast={onToast} />
+      )
       break
     case 'children':
     case 'class-children':
@@ -943,10 +1261,15 @@ export function MenuScreen({
       content = <PhotoUpload onToast={onToast} />
       break
     case 'photo-status':
-      content = <PhotoStatus />
+      content = (
+        <PhotoStatus
+          onSafetyAction={onSafetyAction}
+          onToast={onToast}
+        />
+      )
       break
     case 'child-album':
-      content = <ChildAlbum />
+      content = <ChildAlbum onToast={onToast} />
       break
     case 'audit':
       content = <AuditLog />
@@ -956,6 +1279,7 @@ export function MenuScreen({
         <Profile
           onLogout={onLogout}
           onReplayIntro={onReplayIntro}
+          onToast={onToast}
           role={role}
         />
       )
@@ -978,7 +1302,11 @@ export function MenuScreen({
       <PageHeader
         eyebrow={`${ROLE_LABELS[role]} · Giving Tree`}
         onBack={onBack}
-        title={MENU_TITLES[menu]}
+        title={
+          menu === 'class-note' && role === 'director'
+            ? '반별 알림장'
+            : MENU_TITLES[menu]
+        }
       />
       <div className="page-content">{content}</div>
     </main>

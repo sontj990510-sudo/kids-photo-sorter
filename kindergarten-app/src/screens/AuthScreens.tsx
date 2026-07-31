@@ -158,8 +158,13 @@ export function LoginScreen({
           <label>
             <span>아이디</span>
             <input
+              aria-describedby={error ? 'login-error' : undefined}
+              aria-invalid={Boolean(error)}
               autoComplete="username"
-              onChange={(event) => setUserId(event.target.value)}
+              onChange={(event) => {
+                setUserId(event.target.value)
+                setError('')
+              }}
               placeholder="테스트용 아이디"
               value={userId}
             />
@@ -169,8 +174,13 @@ export function LoginScreen({
             <span>비밀번호</span>
             <div className="password-field">
               <input
+                aria-describedby={error ? 'login-error' : undefined}
+                aria-invalid={Boolean(error)}
                 autoComplete="current-password"
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => {
+                  setPassword(event.target.value)
+                  setError('')
+                }}
                 placeholder="8자 이상"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
@@ -204,7 +214,7 @@ export function LoginScreen({
           </fieldset>
 
           {error && (
-            <p className="form-error" role="alert">
+            <p className="form-error" id="login-error" role="alert">
               {error}
             </p>
           )}
@@ -247,22 +257,44 @@ const initialSignupForm: SignupForm = {
   birthDate: '',
 }
 
+let signupDraft: SignupForm = { ...initialSignupForm }
+let signupDraftStep = 1
+
+function getLocalDateString() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export function SignupScreen({
   navigate,
 }: {
   navigate: Navigate
 }) {
-  const [step, setStep] = useState(1)
-  const [form, setForm] = useState(initialSignupForm)
+  const [step, setStep] = useState(signupDraftStep)
+  const [form, setForm] = useState(() => ({ ...signupDraft }))
   const [error, setError] = useState('')
 
-  const maxBirthDate = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const maxBirthDate = useMemo(() => getLocalDateString(), [])
 
   const updateField = <Key extends keyof SignupForm>(
     key: Key,
     value: SignupForm[Key],
   ) => {
-    setForm((current) => ({ ...current, [key]: value }))
+    setForm((current) => {
+      const next = { ...current, [key]: value }
+      signupDraft = next
+      return next
+    })
+    setError('')
+  }
+
+  const goToStep = (nextStep: number) => {
+    const safeStep = Math.max(1, Math.min(4, nextStep))
+    signupDraftStep = safeStep
+    setStep(safeStep)
     setError('')
   }
 
@@ -312,10 +344,12 @@ export function SignupScreen({
     }
 
     setError('')
-    setStep((current) => Math.min(4, current + 1))
+    goToStep(step + 1)
   }
 
   const submitApplication = () => {
+    signupDraft = form
+    signupDraftStep = 4
     navigate('pending')
   }
 
@@ -328,7 +362,7 @@ export function SignupScreen({
             aria-label={step === 1 ? '이전 화면으로' : '이전 단계로'}
             className="round-back-button"
             onClick={() =>
-              step === 1 ? navigate('welcome') : setStep((current) => current - 1)
+              step === 1 ? navigate('welcome') : goToStep(step - 1)
             }
             type="button"
           >
@@ -346,7 +380,14 @@ export function SignupScreen({
           <span className="step-count">{step} / 4</span>
         </header>
 
-        <div className="step-progress" aria-label={`가입 신청 ${step}단계`}>
+        <div
+          aria-label={`가입 신청 ${step}단계`}
+          aria-valuemax={4}
+          aria-valuemin={1}
+          aria-valuenow={step}
+          className="step-progress"
+          role="progressbar"
+        >
           {[1, 2, 3, 4].map((item) => (
             <span className={item <= step ? 'active' : ''} key={item} />
           ))}
@@ -361,6 +402,7 @@ export function SignupScreen({
           <div className="role-choice-list">
             {(['parent', 'teacher'] as const).map((role) => (
               <button
+                aria-pressed={form.role === role}
                 className={form.role === role ? 'selected' : ''}
                 key={role}
                 onClick={() => updateField('role', role)}
@@ -393,6 +435,8 @@ export function SignupScreen({
             <label>
               <span>아이디</span>
               <input
+                aria-describedby={error ? 'signup-error' : undefined}
+                aria-invalid={Boolean(error)}
                 autoComplete="username"
                 onChange={(event) => updateField('userId', event.target.value)}
                 placeholder="4자 이상"
@@ -402,6 +446,8 @@ export function SignupScreen({
             <label>
               <span>비밀번호</span>
               <input
+                aria-describedby={error ? 'signup-error' : undefined}
+                aria-invalid={Boolean(error)}
                 autoComplete="new-password"
                 onChange={(event) => updateField('password', event.target.value)}
                 placeholder="8자 이상"
@@ -412,6 +458,8 @@ export function SignupScreen({
             <label>
               <span>비밀번호 다시 입력</span>
               <input
+                aria-describedby={error ? 'signup-error' : undefined}
+                aria-invalid={Boolean(error)}
                 autoComplete="new-password"
                 onChange={(event) =>
                   updateField('passwordConfirm', event.target.value)
@@ -429,6 +477,8 @@ export function SignupScreen({
             <label>
               <span>전화번호</span>
               <input
+                aria-describedby={error ? 'signup-error' : undefined}
+                aria-invalid={Boolean(error)}
                 autoComplete="tel"
                 inputMode="tel"
                 onChange={(event) => updateField('phone', event.target.value)}
@@ -447,6 +497,8 @@ export function SignupScreen({
                   <label>
                     <span>아이 한국 이름</span>
                     <input
+                      aria-describedby={error ? 'signup-error' : undefined}
+                      aria-invalid={Boolean(error)}
                       onChange={(event) =>
                         updateField('koreanName', event.target.value)
                       }
@@ -457,6 +509,8 @@ export function SignupScreen({
                   <label>
                     <span>아이 영어 이름</span>
                     <input
+                      aria-describedby={error ? 'signup-error' : undefined}
+                      aria-invalid={Boolean(error)}
                       onChange={(event) =>
                         updateField('englishName', event.target.value)
                       }
@@ -468,6 +522,8 @@ export function SignupScreen({
                 <label>
                   <span>아이 생년월일</span>
                   <input
+                    aria-describedby={error ? 'signup-error' : undefined}
+                    aria-invalid={Boolean(error)}
                     max={maxBirthDate}
                     onChange={(event) => updateField('birthDate', event.target.value)}
                     type="date"
@@ -525,7 +581,7 @@ export function SignupScreen({
         )}
 
         {error && (
-          <p className="form-error" role="alert">
+          <p className="form-error" id="signup-error" role="alert">
             {error}
           </p>
         )}

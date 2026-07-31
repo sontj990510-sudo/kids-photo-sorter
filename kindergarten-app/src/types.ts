@@ -63,4 +63,6 @@ export type SafetyAction = {
   confirmationText: string
   impacts: string[]
   mode: 'request' | 'schedule'
+  severity?: 'review' | 'critical'
+  successMessage?: string
 }

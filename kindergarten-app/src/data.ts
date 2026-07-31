@@ -165,20 +165,6 @@ export const MENUS_BY_ROLE: Record<Role, MenuItem[]> = {
       icon: 'meal',
       tone: 'wood',
     },
-    {
-      key: 'notifications',
-      label: '알림 모아보기',
-      eyebrow: '설정 가능',
-      icon: 'bell',
-      tone: 'sky',
-    },
-    {
-      key: 'profile',
-      label: '내 정보',
-      eyebrow: '하린 · 판다반',
-      icon: 'profile',
-      tone: 'sun',
-    },
   ],
 }
 
@@ -193,7 +179,7 @@ export const MENU_TITLES: Record<MenuItem['key'], string> = {
   'upload-photos': '아이 사진 올리기',
   'class-children': '판다반 원아',
   'child-album': '우리 아이 사진첩',
-  notifications: '알림 모아보기',
+  notifications: '알림 및 설정',
   audit: '관리 기록',
   profile: '내 정보',
 }

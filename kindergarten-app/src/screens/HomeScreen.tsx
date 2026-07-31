@@ -34,13 +34,13 @@ export function HomeScreen({
           </div>
         </div>
         <button
-          aria-label="알림 모아보기"
+          aria-label="알림 모아보기, 새 소식 4개"
           className="header-alert-button"
           onClick={() => onOpenMenu('notifications')}
           type="button"
         >
           <Icon name="bell" size={23} />
-          <span />
+          <span aria-hidden="true" />
         </button>
       </header>
 
@@ -158,6 +158,11 @@ export function BottomNavigation({
     <nav className="bottom-navigation" aria-label="주요 메뉴">
       {items.map((item) => (
         <button
+          aria-label={
+            item.key === 'notifications'
+              ? '알림, 새 소식 4개'
+              : item.label
+          }
           aria-current={active === item.key ? 'page' : undefined}
           className={active === item.key ? 'active' : ''}
           key={item.key}
@@ -166,7 +171,7 @@ export function BottomNavigation({
         >
           <span>
             <Icon name={item.icon} size={23} />
-            {item.key === 'notifications' && <i />}
+            {item.key === 'notifications' && <i aria-hidden="true" />}
           </span>
           <small>{item.label}</small>
         </button>

@@ -9,7 +9,7 @@ import {
 import { BottomNavigation, HomeScreen } from './screens/HomeScreen'
 import { MenuScreen } from './screens/MenuScreen'
 import { SafetyDialog } from './components/SafetyDialog'
-import { MENUS_BY_ROLE } from './data'
+import { MENUS_BY_ROLE, MENU_TITLES } from './data'
 import type { AppScreen, MenuKey, Role, SafetyAction } from './types'
 
 const VALID_MENUS = new Set<MenuKey>([
@@ -29,10 +29,16 @@ const VALID_MENUS = new Set<MenuKey>([
 ])
 
 function parseScreen(): AppScreen {
+  if (typeof window === 'undefined') {
+    return 'splash'
+  }
+
   const raw = window.location.hash.replace(/^#\/?/, '')
 
   if (!raw) {
-    return 'splash'
+    return window.localStorage.getItem('gt-kindergarten-intro-seen')
+      ? 'welcome'
+      : 'splash'
   }
 
   if (raw.startsWith('menu/')) {
@@ -55,6 +61,10 @@ function parseScreen(): AppScreen {
 }
 
 function loadDemoRole(): Role | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
   const stored = window.sessionStorage.getItem('gt-kindergarten-demo-role')
   return stored === 'director' || stored === 'teacher' || stored === 'parent'
     ? stored
@@ -67,22 +77,34 @@ function App() {
   const [safetyAction, setSafetyAction] = useState<SafetyAction | null>(null)
   const [toast, setToast] = useState('')
 
-  const navigate = useCallback((destination: AppScreen) => {
-    const nextHash = `#/${destination}`
-    if (window.location.hash === nextHash) {
-      setScreen(destination)
-    } else {
-      window.location.hash = nextHash
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [])
+  const navigate = useCallback(
+    (destination: AppScreen, options?: { replace?: boolean }) => {
+      const nextHash = `#/${destination}`
+
+      if (options?.replace) {
+        window.history.replaceState(null, '', nextHash)
+        setScreen(destination)
+      } else if (window.location.hash === nextHash) {
+        setScreen(destination)
+      } else {
+        window.location.hash = nextHash
+      }
+
+      const reducedMotion = window.matchMedia(
+        '(prefers-reduced-motion: reduce)',
+      ).matches
+      window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
+    },
+    [],
+  )
 
   useEffect(() => {
     const handleHashChange = () => setScreen(parseScreen())
     window.addEventListener('hashchange', handleHashChange)
 
     if (!window.location.hash) {
-      window.location.hash = '#/splash'
+      const initialScreen = parseScreen()
+      window.history.replaceState(null, '', `#/${initialScreen}`)
     }
 
     return () => window.removeEventListener('hashchange', handleHashChange)
@@ -97,7 +119,10 @@ function App() {
       '(prefers-reduced-motion: reduce)',
     ).matches
     const timer = window.setTimeout(
-      () => navigate('welcome'),
+      () => {
+        window.localStorage.setItem('gt-kindergarten-intro-seen', 'true')
+        navigate('welcome', { replace: true })
+      },
       reducedMotion ? 450 : 1900,
     )
 
@@ -137,14 +162,20 @@ function App() {
     navigate('splash')
   }
 
+  const skipIntro = () => {
+    window.localStorage.setItem('gt-kindergarten-intro-seen', 'true')
+    navigate('welcome', { replace: true })
+  }
+
   const openMenu = (menu: MenuKey) => navigate(`menu/${menu}`)
 
   const confirmSafetyAction = (action: SafetyAction) => {
     setSafetyAction(null)
     setToast(
-      action.mode === 'request'
-        ? '원장 확인 요청을 만들었어요. 실제 데이터는 변경되지 않았습니다.'
-        : '복구 가능한 예약을 만들었어요. 실제 데이터는 변경되지 않았습니다.',
+      action.successMessage ??
+        (action.mode === 'request'
+          ? '원장 확인 요청을 만들었어요. 실제 데이터는 변경되지 않았습니다.'
+          : '검토 작업을 완료했어요. 실제 데이터는 변경되지 않았습니다.'),
     )
   }
 
@@ -165,6 +196,59 @@ function App() {
         ? 'home'
         : screen
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (protectedScreen && !role) {
+        navigate('welcome', { replace: true })
+        return
+      }
+
+      if (requestedMenu && !menuAllowed) {
+        setToast('이 계정에는 해당 메뉴를 열 권한이 없어요.')
+        navigate('home', { replace: true })
+      }
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [
+    menuAllowed,
+    navigate,
+    protectedScreen,
+    requestedMenu,
+    role,
+  ])
+
+  useEffect(() => {
+    const requestedVisibleMenu = visibleScreen.startsWith('menu/')
+      ? (visibleScreen.slice('menu/'.length) as MenuKey)
+      : null
+    const pageTitle = requestedVisibleMenu
+      ? MENU_TITLES[requestedVisibleMenu]
+      : visibleScreen === 'home'
+        ? '홈'
+        : visibleScreen === 'signup'
+          ? '가입 신청'
+          : visibleScreen === 'login'
+            ? '로그인'
+            : 'Giving Tree'
+
+    document.title = `${pageTitle} · Giving Tree`
+
+    const frame = window.requestAnimationFrame(() => {
+      const heading = document.querySelector<HTMLElement>(
+        '.kindergarten-app main h1',
+      )
+      if (heading) {
+        heading.tabIndex = -1
+        heading.focus({ preventScroll: true })
+      }
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [visibleScreen])
+
   const bottomNavigation =
     role && (visibleScreen === 'home' || visibleScreen.startsWith('menu/')) ? (
       <BottomNavigation
@@ -182,9 +266,9 @@ function App() {
     ) : null
 
   return (
-    <div className="kindergarten-app">
+    <div className="kindergarten-app" data-screen={visibleScreen}>
       {visibleScreen === 'splash' && (
-        <SplashScreen onSkip={() => navigate('welcome')} />
+        <SplashScreen onSkip={skipIntro} />
       )}
 
       {visibleScreen === 'welcome' && (
@@ -231,6 +315,14 @@ function App() {
         onCancel={() => setSafetyAction(null)}
         onConfirm={confirmSafetyAction}
       />
+
+      <span className="sr-only" aria-live="polite">
+        {visibleScreen.startsWith('menu/')
+          ? MENU_TITLES[visibleScreen.slice('menu/'.length) as MenuKey]
+          : visibleScreen === 'home'
+            ? '홈 화면'
+            : ''}
+      </span>
 
       {toast && (
         <div className="toast" role="status">
