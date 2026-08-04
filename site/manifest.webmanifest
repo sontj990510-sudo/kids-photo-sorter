@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Giving Tree 유치원",
+  "short_name": "Giving Tree",
+  "description": "공지, 사진 소식, 메시지와 유치원 일정을 안전하게 확인합니다.",
+  "lang": "ko",
+  "start_url": "/#/home",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f7ed",
+  "theme_color": "#2f6849",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

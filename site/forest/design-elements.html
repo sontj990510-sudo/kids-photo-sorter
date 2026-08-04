@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Giving Tree 디자인 요소 보관함</title>
+    <style>
+      :root {
+        font-family: Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+        color: #153f2a;
+        background: #fff;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #fff; }
+      main { width: min(100% - 28px, 1080px); margin: 0 auto; padding: 38px 0 64px; }
+      header { display: flex; align-items: end; justify-content: space-between; gap: 20px; border-bottom: 1px solid #dcecdf; padding-bottom: 22px; }
+      header p, header h1 { margin: 0; }
+      header p { margin-bottom: 7px; color: #3c8b5a; font-size: 12px; font-weight: 900; letter-spacing: .13em; }
+      header h1 { font-size: clamp(26px, 5vw, 42px); letter-spacing: -.055em; }
+      header a { flex: 0 0 auto; border: 1px solid #cfe4d6; border-radius: 14px; padding: 11px 14px; color: #17643f; font-size: 13px; font-weight: 850; text-decoration: none; }
+      section { margin-top: 38px; }
+      .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+      .section-heading h2, .section-heading p { margin: 0; }
+      .section-heading h2 { font-size: clamp(19px, 3.5vw, 27px); letter-spacing: -.04em; }
+      .section-heading p { max-width: 520px; color: #607468; font-size: 13px; line-height: 1.55; text-align: right; }
+      .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+      article { position: relative; overflow: hidden; min-height: 220px; border: 1px solid #d9eadf; border-radius: 24px; padding: 16px; background: #f8fcf9; }
+      article img { display: block; width: 100%; height: 165px; object-fit: contain; animation: float 4.8s ease-in-out infinite; }
+      article:nth-child(2n) img { animation-delay: -1.6s; }
+      article:nth-child(3n) img { animation-delay: -3.1s; }
+      article strong { display: block; margin-top: 4px; font-size: 15px; }
+      article small { display: block; margin-top: 4px; color: #688075; font-size: 12px; line-height: 1.45; }
+      .future-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .future-grid article { min-height: 420px; background: #fff; }
+      .future-grid article img { height: 320px; animation-duration: 7s; }
+      .season-grid article { background: #fff; }
+      .badge { position: absolute; top: 13px; right: 13px; border: 1px solid #cfe4d6; border-radius: 999px; padding: 5px 8px; background: #fff; color: #257248; font-size: 10px; font-weight: 900; }
+      .note { margin-top: 16px; border: 1px solid #d9eadf; border-radius: 18px; padding: 14px 16px; background: #f3faf5; color: #536d5e; font-size: 13px; line-height: 1.6; }
+      @keyframes float { 0%, 100% { transform: translateY(0) rotate(-.5deg); } 50% { transform: translateY(-5px) rotate(.5deg); } }
+      @media (max-width: 760px) {
+        main { padding-top: 24px; }
+        header { align-items: start; }
+        .section-heading { display: block; }
+        .section-heading p { margin-top: 7px; text-align: left; }
+        .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        article { min-height: 190px; }
+        article img { height: 135px; }
+        .future-grid article { min-height: 310px; }
+        .future-grid article img { height: 225px; }
+      }
+      @media (max-width: 390px) {
+        header { display: block; }
+        header a { display: inline-block; margin-top: 14px; }
+        .future-grid { grid-template-columns: 1fr; }
+      }
+      @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p>GIVING TREE DESIGN LIBRARY</p>
+          <h1>숲속 친구와 계절 요소</h1>
+        </div>
+        <a href="/#/welcome">앱으로 돌아가기</a>
+      </header>
+
+      <section>
+        <div class="section-heading">
+          <h2>이전 채색 시안 보관</h2>
+          <p>현재 앱은 더 가벼운 코드 기반 미니멀 선화를 사용합니다. 아래 채색 시안은 향후 인쇄물이나 큰 안내 화면에서 다시 비교할 수 있도록 보관합니다.</p>
+        </div>
+        <div class="grid">
+          <article><span class="badge">원장</span><img src="/forest/mascots/turtle-principal.webp" alt="거북이 선생님" /><strong>거북이 선생님</strong><small>원장 화면 전용</small></article>
+          <article><span class="badge">반별</span><img src="/forest/mascots/panda.webp" alt="판다반 친구" /><strong>판다반</strong><small>교사 데모 화면 연결</small></article>
+          <article><span class="badge">반별</span><img src="/forest/mascots/dog.webp" alt="강아지반 친구" /><strong>강아지반</strong><small>반 이름 자동 연결 준비</small></article>
+          <article><span class="badge">반별</span><img src="/forest/mascots/raccoon.webp" alt="너구리반 친구" /><strong>너구리반</strong><small>반 이름 자동 연결 준비</small></article>
+          <article><span class="badge">반별</span><img src="/forest/mascots/cat.webp" alt="고양이반 친구" /><strong>고양이반</strong><small>반 이름 자동 연결 준비</small></article>
+          <article><span class="badge">반별</span><img src="/forest/mascots/bear.webp" alt="베어반 친구" /><strong>베어반</strong><small>반 이름 자동 연결 준비</small></article>
+          <article><span class="badge">반별</span><img src="/forest/mascots/rabbit.webp" alt="토끼반 친구" /><strong>토끼반</strong><small>학부모 데모 화면 연결</small></article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <h2>나중에 월별 화면에 넣을 계절 장식</h2>
+          <p>이번 1차 화면에는 가벼운 CSS 계절 변화만 적용했고, 아래 큰 그림은 화면이 복잡해지지 않도록 보관 상태로 두었습니다.</p>
+        </div>
+        <div class="grid season-grid">
+          <article><span class="badge">3–5월</span><img src="/forest/seasons/spring.webp" alt="봄 새싹과 꽃 장식" /><strong>따뜻한 봄</strong><small>새싹·꽃·웃는 해·나비</small></article>
+          <article><span class="badge">6–8월</span><img src="/forest/seasons/summer.webp" alt="여름 나뭇가지와 새 장식" /><strong>초록 여름</strong><small>그늘 잎·파랑새·물뿌리개</small></article>
+          <article><span class="badge">9–11월</span><img src="/forest/seasons/autumn.webp" alt="가을 나뭇잎과 도토리 장식" /><strong>포근한 가을</strong><small>단풍·도토리·고슴도치 친구</small></article>
+          <article><span class="badge">12–2월</span><img src="/forest/seasons/winter.webp" alt="겨울 나무와 산타 모자 장식" /><strong>포근한 겨울</strong><small>눈나무·산타 모자·니트 새싹</small></article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <h2>후속 반영 후보</h2>
+          <p>사용자 검토 후 알림 빈 화면, 승인 완료, 달력 계절 전환 등에 한두 개씩 선택해서 사용할 수 있습니다.</p>
+        </div>
+        <div class="grid future-grid">
+          <article><span class="badge">보관 중</span><img src="/forest/future/turtle-poses.webp" alt="거북이 선생님 네 가지 포즈" /><strong>거북이 선생님 4가지 포즈</strong><small>인사·책 읽기·새싹 돌보기·축하</small></article>
+          <article><span class="badge">보관 중</span><img src="/forest/future/seasonal-accessories.webp" alt="계절 액세서리 아홉 가지" /><strong>계절 액세서리 9종</strong><small>새싹·꽃·여름·가을·겨울·교사 포인트</small></article>
+        </div>
+        <p class="note">현재 앱의 반별 동물은 미니멀 선화로 바뀌었으며 한 화면에 기본 1마리만 사용합니다. 계절 장식은 제목이나 빈 화면의 한쪽 모서리에만 배치합니다.</p>
+      </section>
+    </main>
+  </body>
+</html>
