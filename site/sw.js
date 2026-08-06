@@ -5,8 +5,16 @@ const STATIC_ALLOWED_URLS = new Set([
   '/#/menu/meals',
   '/#/menu/child-album',
   '/#/menu/calendar',
+  '/#/menu/tuition-history',
 ])
 const ATTENDANCE_SOURCE_TYPE = 'child_attendance_notice'
+const TUITION_SOURCE_TYPE = 'tuition_record'
+const TUITION_EVENT_KINDS = new Set([
+  'tuition_created',
+  'tuition_updated',
+  'tuition_paid',
+  'tuition_reopened',
+])
 const ATTENDANCE_EVENT_KINDS = new Set([
   'attendance_submitted',
   'attendance_updated',
@@ -54,6 +62,10 @@ self.addEventListener('push', (event) => {
   const isAttendance =
     payload.category === 'attendance' ||
     payload.source_type === ATTENDANCE_SOURCE_TYPE
+  const isTuition =
+    payload.category === 'tuition' ||
+    payload.source_type === TUITION_SOURCE_TYPE ||
+    TUITION_EVENT_KINDS.has(payload.event_kind)
   const attendanceEventKind =
     typeof payload.event_kind === 'string' &&
     ATTENDANCE_EVENT_KINDS.has(payload.event_kind)
@@ -68,23 +80,33 @@ self.addEventListener('push', (event) => {
     typeof payload.action_url === 'string'
       ? ATTENDANCE_ACTION_URL_PATTERN.exec(payload.action_url)
       : null
-  const actionUrl = isAttendance && noticeId &&
-      attendanceActionMatch?.[2] === noticeId
-    ? payload.action_url
-    : STATIC_ALLOWED_URLS.has(payload.action_url)
+  const actionUrl = isTuition
+    ? '/#/menu/tuition-history'
+    : isAttendance && noticeId && attendanceActionMatch?.[2] === noticeId
       ? payload.action_url
-      : DEFAULT_URL
+      : STATIC_ALLOWED_URLS.has(payload.action_url)
+        ? payload.action_url
+        : DEFAULT_URL
   const title = isAttendance
     ? attendanceTitle(attendanceEventKind)
-    : typeof payload.title === 'string' && payload.title
-      ? payload.title
-      : 'Giving Tree 새 알림'
+    : isTuition
+      ? '학비 내역이 변경됐어요'
+      : typeof payload.title === 'string' && payload.title
+        ? payload.title
+        : 'Giving Tree 새 알림'
   const body = isAttendance
     ? 'Giving Tree 앱에서 안전하게 확인해 주세요.'
-    : typeof payload.body === 'string' && payload.body
-      ? payload.body
-      : 'Giving Tree 앱에서 내용을 확인해 주세요.'
+    : isTuition
+      ? 'Giving Tree 앱 안에서 확인해 주세요.'
+      : typeof payload.body === 'string' && payload.body
+        ? payload.body
+        : 'Giving Tree 앱에서 내용을 확인해 주세요.'
   const attendanceNotificationId =
+    typeof payload.notification_id === 'string' &&
+    UUID_PATTERN.test(payload.notification_id)
+      ? payload.notification_id
+      : null
+  const tuitionNotificationId =
     typeof payload.notification_id === 'string' &&
     UUID_PATTERN.test(payload.notification_id)
       ? payload.notification_id
@@ -93,16 +115,20 @@ self.addEventListener('push', (event) => {
     ? attendanceNotificationId
       ? `giving-tree-attendance-${attendanceNotificationId}`
       : 'giving-tree-attendance'
-    : typeof payload.tag === 'string' && payload.tag
-      ? payload.tag
-      : 'giving-tree-notification'
+    : isTuition
+      ? tuitionNotificationId
+        ? `giving-tree-tuition-${tuitionNotificationId}`
+        : 'giving-tree-tuition'
+      : typeof payload.tag === 'string' && payload.tag
+        ? payload.tag
+        : 'giving-tree-notification'
 
   event.waitUntil(self.registration.showNotification(title, {
     body,
     icon: '/app-icon-192.png',
     badge: '/app-badge-96.png',
     tag,
-    renotify: isAttendance,
+    renotify: isAttendance || isTuition,
     requireInteraction: isAttendance,
     data: { actionUrl },
   }))

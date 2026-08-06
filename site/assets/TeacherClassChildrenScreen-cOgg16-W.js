@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-CBYkxpZ6.js";import{t}from"./ChildRosterPanel-CaS3-NkA.js";var n=e();function r({demoMode:e=!1,initialAttendanceNoticeId:r}){return(0,n.jsx)(`div`,{className:`content-stack`,children:(0,n.jsx)(t,{demoMode:e,initialNoticeId:r,viewerRole:`teacher`})})}export{r as TeacherClassChildrenScreen};

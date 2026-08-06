@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" role="img" aria-labelledby="title description" data-character-system="giving-tree-v2">
+  <title id="title">Giving Tree 동물 캐릭터 시스템</title>
+  <desc id="description">거북이, 판다, 강아지, 너구리, 고양이, 곰, 토끼, 다람쥐를 같은 선 굵기와 절제된 색으로 그린 벡터 캐리커처입니다.</desc>
+  <defs>
+    <symbol id="turtle" viewBox="0 0 160 140">
+      <g fill="none" stroke="#254b3b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <path fill="#dce9d9" d="M18 100c0-32 23-55 56-55 29 0 51 19 55 47-22 18-78 24-111 8Z"/>
+        <path d="M30 93c7-23 23-37 45-37 20 0 37 12 45 33M50 61l17 42m28-43-15 46M27 83h96"/>
+        <path fill="#fffdf8" d="M112 67c6-15 18-24 31-18 13 7 13 27 1 38-10 9-24 8-34 1"/>
+        <circle cx="132" cy="65" r="7"/>
+        <circle cx="147" cy="65" r="7"/>
+        <path d="M139 65h1m-15 0h-3m32 0h3"/>
+        <circle cx="132" cy="65" r="1.8" fill="#254b3b" stroke="none"/>
+        <circle cx="147" cy="65" r="1.8" fill="#254b3b" stroke="none"/>
+        <circle cx="145" cy="77" r="4.6" fill="#eab8a8" stroke="none" opacity=".75"/>
+        <path d="M134 77c4 4 9 4 13 0"/>
+        <path fill="#fffdf8" d="M30 99c-10 1-16 8-12 15 4 7 14 5 21-3m55-4c5 11 15 15 21 9 6-6 0-14-9-18M23 91 11 85l9-8"/>
+        <path fill="#d8b66b" d="M115 91c7-5 14-5 20-1-3 7-9 10-18 8m0 0c5 4 7 10 5 16-7-3-10-8-8-16"/>
+      </g>
+    </symbol>
+
+    <symbol id="panda" viewBox="0 0 160 140">
+      <g fill="none" stroke="#254b3b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="49" cy="33" r="15" fill="#254b3b"/>
+        <circle cx="111" cy="33" r="15" fill="#254b3b"/>
+        <path fill="#fffdf8" d="M34 64c0-31 19-50 46-50s46 19 46 50c0 29-19 47-46 47S34 93 34 64Z"/>
+        <path fill="#254b3b" d="M47 58c3-13 13-19 22-12 8 7 3 22-8 26-10 3-17-4-14-14Zm66 0c-3-13-13-19-22-12-8 7-3 22 8 26 10 3 17-4 14-14Z"/>
+        <path d="M58 58h.1m44 0h.1" stroke="#fffdf8" stroke-width="4.5"/>
+        <path fill="#edf2ec" d="M63 72c2-10 9-16 17-16s15 6 17 16c0 13-7 21-17 21s-17-8-17-21Z"/>
+        <path fill="#254b3b" d="M74 68c3-3 9-3 12 0 1 4-2 7-6 7s-7-3-6-7Z"/>
+        <path d="M80 75v7m-10-2c5 6 15 6 20 0"/>
+        <circle cx="51" cy="78" r="5" fill="#e9b7b0" stroke="none" opacity=".72"/>
+        <circle cx="109" cy="78" r="5" fill="#e9b7b0" stroke="none" opacity=".72"/>
+        <path fill="#fffdf8" d="M49 106c8-9 18-14 31-14s23 5 31 14l5 25H44l5-25Z"/>
+        <path fill="#254b3b" d="M54 105c8-3 14 4 12 13-1 8-7 13-15 10-8-3-9-11-5-17 3-4 5-5 8-6Zm52 0c-8-3-14 4-12 13 1 8 7 13 15 10 8-3 9-11 5-17-3-4-5-5-8-6Z"/>
+        <path d="M119 117c9-18 12-35 11-53"/>
+        <path fill="#dbe9d9" d="M130 82c-10-7-10-16-2-22 9 4 11 12 2 22Zm-2 19c9-7 17-5 20 3-7 7-14 6-20-3Z"/>
+      </g>
+    </symbol>
+
+    <symbol id="dog" viewBox="0 0 160 140">
+      <g fill="none" stroke="#254b3b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <path fill="#ead8c2" d="M48 42C31 20 10 27 13 50c2 18 15 34 33 35l13-26m53-17c17-22 38-15 35 8-2 18-15 34-33 35l-13-26"/>
+        <path fill="#fff9ef" d="M35 64c0-31 18-50 45-50s45 19 45 50c0 29-18 47-45 47S35 93 35 64Z"/>
+        <path fill="#d8aa72" d="M48 45c7-12 19-14 29-5 1 15-7 24-19 23-9-1-13-8-10-18Z"/>
+        <path d="M60 62c3 3 7 3 10 0m20 0c3 3 7 3 10 0"/>
+        <circle cx="54" cy="80" r="5" fill="#ecb5a3" stroke="none" opacity=".72"/>
+        <circle cx="106" cy="80" r="5" fill="#ecb5a3" stroke="none" opacity=".72"/>
+        <path fill="#f2e9dc" d="M63 74c2-10 9-16 17-16s15 6 17 16c0 13-7 21-17 21s-17-8-17-21Z"/>
+        <path fill="#254b3b" d="M74 70c3-3 9-3 12 0 1 4-2 7-6 7s-7-3-6-7Z"/>
+        <path d="M80 77v7m-10-2c5 6 15 6 20 0"/>
+        <path fill="#fff9ef" d="M51 106c7-9 17-14 29-14s22 5 29 14l5 25H46l5-25Z"/>
+        <path d="M108 112c17 0 25-9 21-20-3-7-11-8-16-2"/>
+        <path fill="#6f987c" d="M58 99h44l-7 12H65l-7-12Z"/>
+        <path fill="#d8b66b" d="M74 110c0-5 3-8 6-8s6 3 6 8c0 4-3 8-6 11-3-3-6-7-6-11Z"/>
+      </g>
+    </symbol>
+
+    <symbol id="raccoon" viewBox="0 0 160 140">
+      <g fill="none" stroke="#254b3b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <path fill="#dce4df" d="M103 116c18-30 39-39 50-25 11 15-4 38-33 43l-17-18Z"/>
+        <path d="m119 100 18 25m-7-34 18 24"/>
+        <path fill="#edf1ee" d="m37 47 4-31 23 18m59 13-4-31-23 18"/>
+        <path fill="#fffdf8" d="M33 66c0-31 19-50 47-50s47 19 47 50c0 29-19 46-47 46S33 95 33 66Z"/>
+        <path fill="#466154" d="M40 62c11-18 25-23 40-9 15-14 29-9 40 9-8 18-21 25-40 14-19 11-32 4-40-14Z"/>
+        <path d="M59 62h.1m42 0h.1" stroke="#fffdf8" stroke-width="4.5"/>
+        <path fill="#edf1ee" d="M66 75c3-8 25-8 28 0 0 12-6 19-14 19s-14-7-14-19Z"/>
+        <path fill="#254b3b" d="M74 72c3-3 9-3 12 0 1 4-2 7-6 7s-7-3-6-7Z"/>
+        <path d="M80 79v6m-9-1c5 6 13 6 18 0"/>
+        <circle cx="53" cy="82" r="5" fill="#e6b4ad" stroke="none" opacity=".7"/>
+        <circle cx="107" cy="82" r="5" fill="#e6b4ad" stroke="none" opacity=".7"/>
+        <path fill="#fffdf8" d="M50 108c8-10 18-14 30-14s22 4 30 14l4 23H46l4-23Z"/>
+        <path fill="#d8b66b" d="M47 105c-8-5-15-2-17 5 6 6 13 5 19-1m-2 0c0 7 4 12 11 14 3-7 0-13-9-17"/>
+      </g>
+    </symbol>
+
+    <symbol id="cat" viewBox="0 0 160 140">
+      <g fill="none" stroke="#254b3b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M105 116c26 5 41-8 36-23-4-11-17-14-26-5"/>
+        <path fill="#fff9f2" d="M35 65 43 17l27 21c6-3 14-3 20 0l27-21 8 48c2 30-17 47-45 47S33 95 35 65Z"/>
+        <path fill="#e8b29d" d="m49 31 5-9 9 13Zm62 0-5-9-9 13Z"/>
+        <path d="M57 63c4 4 8 4 12 0m22 0c4 4 8 4 12 0"/>
+        <path fill="#f2e6dc" d="M68 74c3-6 21-6 24 0 0 10-5 15-12 15s-12-5-12-15Z"/>
+        <path fill="#254b3b" d="M74 71c3-2 9-2 12 0 0 4-2 6-6 6s-6-2-6-6Z"/>
+        <path d="M80 77v7m-10-1c5 6 15 6 20 0M60 76l-24-4m24 12-25 4m65-12 24-4m-24 12 25 4"/>
+        <circle cx="52" cy="81" r="5" fill="#ebb6af" stroke="none" opacity=".72"/>
+        <circle cx="108" cy="81" r="5" fill="#ebb6af" stroke="none" opacity=".72"/>
+        <path fill="#fff9f2" d="M52 108c7-9 17-14 28-14s21 5 28 14l5 23H47l5-23Z"/>
+        <path fill="#6f987c" d="M64 99c5-4 11-4 16 0 5-4 11-4 16 0-1 8-7 12-16 8-9 4-15 0-16-8Z"/>
+      </g>
+    </symbol>
+
+    <symbol id="bear" viewBox="0 0 160 140">
+      <g fill="none" stroke="#254b3b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="48" cy="34" r="17" fill="#eadbc7"/>
+        <circle cx="112" cy="34" r="17" fill="#eadbc7"/>
+        <path fill="#fff9ef" d="M33 66c0-33 19-52 47-52s47 19 47 52c0 29-19 46-47 46S33 95 33 66Z"/>
+        <path d="M58 62h.1m44 0h.1" stroke-width="4.5"/>
+        <circle cx="53" cy="82" r="5" fill="#e9b5a4" stroke="none" opacity=".72"/>
+        <circle cx="107" cy="82" r="5" fill="#e9b5a4" stroke="none" opacity=".72"/>
+        <path fill="#efe2d0" d="M61 73c2-13 10-20 19-20s17 7 19 20c0 14-8 22-19 22s-19-8-19-22Z"/>
+        <path fill="#254b3b" d="M73 68c3-3 11-3 14 0 1 5-2 8-7 8s-8-3-7-8Z"/>
+        <path d="M80 76v8m-11-2c6 7 16 7 22 0"/>
+        <path fill="#fff9ef" d="M49 107c8-10 18-15 31-15s23 5 31 15l5 24H44l5-24Z"/>
+        <path d="M58 113c8 7 15 10 22 10s14-3 22-10"/>
+        <path fill="#dce9d9" d="M77 113c-9-11-7-22 2-27 9 7 10 17-2 27Zm3-2c10-8 20-6 24 3-8 8-16 7-24-3Z"/>
+      </g>
+    </symbol>
+
+    <symbol id="rabbit" viewBox="0 0 160 140">
+      <g fill="none" stroke="#254b3b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <path fill="#fffaf8" d="M54 51C42 35 42 5 56 3c14-2 21 27 14 47m37 1c14-13 18-39 7-45-13-7-26 17-22 45"/>
+        <path d="M58 39c-5-13-4-24 0-30m48 33c8-10 10-21 7-29" stroke="#d99baa"/>
+        <path fill="#fffaf8" d="M34 70c0-31 19-50 46-50s46 19 46 50c0 28-19 44-46 44S34 98 34 70Z"/>
+        <path d="M58 65c4 4 8 4 12 0m20 0c4 4 8 4 12 0"/>
+        <circle cx="53" cy="83" r="5" fill="#ecb2be" stroke="none" opacity=".72"/>
+        <circle cx="107" cy="83" r="5" fill="#ecb2be" stroke="none" opacity=".72"/>
+        <path fill="#f4e7eb" d="M66 76c3-8 25-8 28 0 0 12-6 18-14 18s-14-6-14-18Z"/>
+        <path fill="#254b3b" d="M74 73c3-2 9-2 12 0 0 4-2 6-6 6s-6-2-6-6Z"/>
+        <path d="M80 79v7m-9-1c5 6 13 6 18 0"/>
+        <path fill="#fffaf8" d="M51 109c8-10 18-15 29-15s21 5 29 15l5 22H46l5-22Z"/>
+        <circle cx="116" cy="111" r="13" fill="#f3e9ea"/>
+        <path fill="#dce9d9" d="M49 112c-8-8-17-5-18 3 7 6 14 4 20-2m-2 0c-1 9 4 15 12 16 3-8-1-14-12-17Z"/>
+      </g>
+    </symbol>
+
+    <symbol id="squirrel" viewBox="0 0 160 140">
+      <g fill="none" stroke="#254b3b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <path fill="#ead9c4" d="M101 122c32-4 51-28 44-55-6-23-30-31-49-17 19-1 30 13 25 28-4 13-16 20-33 22"/>
+        <path d="M111 61c13 5 16 16 10 27-5 10-14 15-26 16"/>
+        <path fill="#fff9ef" d="M38 68 45 27l24 18c5-3 11-3 16 0l24-18 7 41c2 28-14 45-39 45S36 96 38 68Z"/>
+        <path fill="#d5a76d" d="m51 37 5-8 8 12Zm52 0-5-8-8 12Z"/>
+        <circle cx="60" cy="67" r="2.3" fill="#254b3b" stroke="none"/>
+        <circle cx="96" cy="67" r="2.3" fill="#254b3b" stroke="none"/>
+        <circle cx="55" cy="82" r="5" fill="#e9b5a4" stroke="none" opacity=".72"/>
+        <circle cx="101" cy="82" r="5" fill="#e9b5a4" stroke="none" opacity=".72"/>
+        <path fill="#f0e3d3" d="M65 76c3-7 23-7 26 0 0 11-6 17-13 17s-13-6-13-17Z"/>
+        <path fill="#254b3b" d="M72 73c3-2 9-2 12 0 0 4-2 6-6 6s-6-2-6-6Z"/>
+        <path d="M78 79v7m-9-1c5 6 13 6 18 0"/>
+        <path fill="#fff9ef" d="M51 109c7-10 16-15 27-15s20 5 27 15l5 22H46l5-22Z"/>
+        <path fill="#d8b66b" d="M67 111c0-7 5-12 11-12s11 5 11 12c0 6-5 12-11 17-6-5-11-11-11-17Zm4-15c-3-7 1-12 7-12s10 5 7 12"/>
+      </g>
+    </symbol>
+  </defs>
+
+  <rect width="720" height="360" rx="28" fill="#fbfaf6"/>
+  <g opacity=".96">
+    <svg x="10" y="15" width="170" height="145" viewBox="0 0 160 140"><use href="#turtle"/></svg>
+    <svg x="185" y="15" width="170" height="145" viewBox="0 0 160 140"><use href="#panda"/></svg>
+    <svg x="360" y="15" width="170" height="145" viewBox="0 0 160 140"><use href="#dog"/></svg>
+    <svg x="535" y="15" width="170" height="145" viewBox="0 0 160 140"><use href="#raccoon"/></svg>
+    <svg x="10" y="195" width="170" height="145" viewBox="0 0 160 140"><use href="#cat"/></svg>
+    <svg x="185" y="195" width="170" height="145" viewBox="0 0 160 140"><use href="#bear"/></svg>
+    <svg x="360" y="195" width="170" height="145" viewBox="0 0 160 140"><use href="#rabbit"/></svg>
+    <svg x="535" y="195" width="170" height="145" viewBox="0 0 160 140"><use href="#squirrel"/></svg>
+  </g>
+</svg>
